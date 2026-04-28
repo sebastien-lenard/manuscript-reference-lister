@@ -1,4 +1,5 @@
 import re
+from config_loader import PARSER_DEFAULT_BLACKLIST
 
 class CitationParser:
     """
@@ -8,7 +9,7 @@ class CitationParser:
     
     def __init__(self, blacklist=None):
         # Extended blacklist to avoid confusion with figures/tables
-        self.blacklist = blacklist or ['Fig', 'Figs', 'Figure', 'Figures', 'Tab', 'Table', 'Eq', 'Plate', 'Section', 'See', 'e.g.', 'i.e.']
+        self.blacklist = blacklist or PARSER_DEFAULT_BLACKLIST
         
         # Universal dash handling (standard, unicode 2010-2015)
         dash_range = r"-\u2010-\u2015"
@@ -77,7 +78,7 @@ class CitationParser:
 
                 # Requirement: The group must contain an author pattern followed by year(s).
                 # This prevents capturing isolated dates like (2020) or (in 2020).
-                author_match = re.search(rf"({self.author_pattern})", clean_group)
+                author_match = re.search(rf"({self.author_pattern})\s*,", clean_group)
                 if author_match:
                     author_name = author_match.group(1).strip()
                     years = re.findall(f"({self.year_pattern})", clean_group)

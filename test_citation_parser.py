@@ -111,5 +111,20 @@ class TestCitationParser(unittest.TestCase):
         self.assertEqual(len(citations), 1)
         self.assertEqual(citations[0]['author'], "S.J-P. Lénard et al.")
 
+    def test_exclude_full_references(self):
+        """Test that full APA references are not parsed."""
+        text = ("Bernard, T., G., Lague, D., and Philippe Steer, P. (2021). Beyond 2D "
+            "Landslide Inventories and Their Rollover: Synoptic 3D . Earth Surface "
+            " Dynamics 9 (4), 1013–44. "
+            "https://doi.org/10.5194/esurf-9-1013-2021")
+        citations = self.parser.extract_citations(text)
+        self.assertEqual(len(citations), 0)
+    
+    def test_exclude_dates(self):
+        """Test that dates are not parsed."""
+        text = "When this happened (August 31, 2020), everyboy was impressed."
+        citations = self.parser.extract_citations(text)
+        self.assertEqual(len(citations), 0)
+
 if __name__ == '__main__':
     unittest.main()
