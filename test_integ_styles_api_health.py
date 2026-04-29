@@ -2,7 +2,7 @@ import sys
 from style_fetcher import StyleFetcher
 
 def check_style_api_health():
-    print("Checking Crossref Style API health...")
+    print("Checking Crossref Style API health  via RequestsWrapper...")
     
     # 'apa' is a standard style that should always exist
     fetcher = StyleFetcher("apa")
@@ -19,11 +19,9 @@ def check_style_api_health():
             print("[FAIL] API call failed (status code was not 200).")
             sys.exit(1)
 
-        # Check for Polite Pool headers manually for extra safety
-        import requests
-        from config_loader import CROSSREF_API_STYLES_URL
-        
-        response = requests.get(CROSSREF_API_STYLES_URL, timeout=10)
+        # Check for Polite Pool headers for extra safety
+        response = fetcher.requests_wrapper.get(fetcher.base_url, max_retries=1)
+
         limit = response.headers.get('X-Rate-Limit-Limit')
         if limit:
             print(f"[OK] Rate limiting recognized (Limit: {limit}).")
