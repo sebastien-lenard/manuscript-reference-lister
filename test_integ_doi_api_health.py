@@ -2,7 +2,7 @@ import sys
 from doi_fetcher import DoiFetcher
 
 def test_doi_service_health():
-    print("Checking DOI Content Negotiation Service...")
+    print("Checking DOI Content Negotiation Service  via RequestsWrapper...")
     fetcher = DoiFetcher()
     
     # DOI for Steady erosion rates in the Himalayas through late Cenozoic climatic changes

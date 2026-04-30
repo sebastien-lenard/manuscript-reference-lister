@@ -1,29 +1,32 @@
+import logging
 import requests
-import time
-from config_loader import DOI_API_DELAY, DOI_API_TIMEOUT
-from config_loader import DOI_API_URL
+from requests_wrapper import RequestsWrapper
+from config_loader import CROSSREF_API_EMAIL, DOI_API_DELAY, DOI_API_TIMEOUT
+from config_loader import DOI_API_MAX_RETRY, DOI_API_URL
 
 class DoiFetcher:
     """Handles calls to doi.org, to get full formatted references.
     Done using DOI Content Negotiation Service."""
 
     def __init__(self):
-        self.base_url = DOI_API_URL
-        self.delay = DOI_API_DELAY
-        self.timeout = DOI_API_TIMEOUT
+        self.base_url= DOI_API_URL
+        self.requests_wrapper = RequestsWrapper(CROSSREF_API_EMAIL,
+                                                timeout=DOI_API_TIMEOUT,
+                                                max_retries=DOI_API_MAX_RETRY,
+                                                delay=DOI_API_DELAY)
 
     def get_formatted_reference(self, doi, style):
         """Requests the reference version formatted to a specific style via content
         negotiation."""
-        time.sleep(self.delay)
         headers = {'Accept': f"text/x-bibliography; style={style}"}
 
         try:
-            res = requests.get(self.base_url.replace("{doi}", str(doi)),
-                               headers=headers,
-                               timeout=self.timeout)
-            if res.status_code == 200:
-                return res.text.strip()
-        except:
-            pass
-        return "Reference unavailable in doi.org."
+            res = self.requests_wrapper.get(self.base_url.replace("{doi}", str(doi)),
+                               headers=headers)
+            return res.text.strip()
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                logging.warning("DOI not found (404): %s", doi)
+                return "Reference unavailable in doi.org."
+            # raise for HTTP error other than (500, 403, etc.)
+            raise e
