@@ -1,3 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 .venv/
-__pycache__
+env/
+build/
+dist/
+
+# Conda
+.condarc
+conda-meta/
+
+# VS Code
+.vscode/
+
+# Environment variables
 .env
