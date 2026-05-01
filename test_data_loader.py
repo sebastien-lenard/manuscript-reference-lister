@@ -9,7 +9,7 @@ import pytest
 from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
 
-from text_loader import TextLoader
+from data_loader import DataLoader
 
 EnvPaths = namedtuple("EnvPaths", ["dir", "docx", "docx_content", "json", "json_data"])
 
@@ -30,7 +30,7 @@ def env() -> Iterator[EnvPaths]:
 
         # 2. Setup JSON
         json_path = tmp_path / "test.json"
-        data = {"app": "TextLoader", "version": 1.0}
+        data = {"app": "DataLoader", "version": 1.0}
         json_path.write_text(json.dumps(data), encoding="utf-8")
 
         yield EnvPaths(tmp_path, docx_path, content, json_path, data)
@@ -41,7 +41,7 @@ def env() -> Iterator[EnvPaths]:
 
 def test_extract_text_matches_input(env: EnvPaths) -> None:
     """Verify extracted text matches the seeded document content."""
-    loader = TextLoader(env.docx)
+    loader = DataLoader(env.docx)
     assert loader.extract_text_from_docx() == "\n".join(env.docx_content)
 
 
@@ -50,11 +50,11 @@ def test_extract_text_corrupted_docx(env: EnvPaths, caplog) -> None:
     corrupt_path = env.dir / "corrupt.docx"
     corrupt_path.write_bytes(b"Not a zip file")
 
-    loader = TextLoader(corrupt_path, raise_exception=True)
+    loader = DataLoader(corrupt_path, raise_exception=True)
     with pytest.raises((PackageNotFoundError, BadZipFile)):
         loader.extract_text_from_docx()
 
-    loader_no_fail = TextLoader(corrupt_path, raise_exception=False)
+    loader_no_fail = DataLoader(corrupt_path, raise_exception=False)
     assert loader_no_fail.extract_text_from_docx() is None
     assert "Invalid or corrupted .docx" in caplog.text
 
@@ -64,7 +64,7 @@ def test_extract_text_corrupted_docx(env: EnvPaths, caplog) -> None:
 
 def test_load_json_success(env: EnvPaths) -> None:
     """Verify loading from a valid .json file."""
-    loader = TextLoader(env.json)
+    loader = DataLoader(env.json)
     assert loader.load_json() == env.json_data
 
 
@@ -78,7 +78,7 @@ def test_load_json_invalid_format(
     bad_json = env.dir / "bad.json"
     bad_json.write_text("{ 'wrong': True }")
 
-    loader = TextLoader(bad_json, raise_exception=raise_flag)
+    loader = DataLoader(bad_json, raise_exception=raise_flag)
 
     if expected_behavior == "raise":
         with pytest.raises(json.JSONDecodeError):
@@ -102,7 +102,7 @@ def test_file_not_found_behavior(
 
     if expected_behavior == "raise":
         with pytest.raises(FileNotFoundError):
-            TextLoader(missing_file, raise_exception=raise_flag)
+            DataLoader(missing_file, raise_exception=raise_flag)
     else:
-        TextLoader(missing_file, raise_exception=raise_flag)
+        DataLoader(missing_file, raise_exception=raise_flag)
         assert "Input file not found" in caplog.text

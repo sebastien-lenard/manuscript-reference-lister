@@ -7,7 +7,7 @@ from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
 
 
-class TextLoader:
+class DataLoader:
     """Handles data loading and text extraction for DOCX and JSON files.
 
     Attributes:
