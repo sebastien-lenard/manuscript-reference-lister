@@ -1,39 +1,108 @@
-import unittest
-import os
+import json
+import tempfile
+from collections import namedtuple
+from collections.abc import Iterator
+from pathlib import Path
+from zipfile import BadZipFile
+
+import pytest
 from docx import Document
+from docx.opc.exceptions import PackageNotFoundError
+
 from text_loader import TextLoader
 
-class TestTextLoader(unittest.TestCase):
-    def setUp(self):
-        """Create a dummy docx file for testing."""
-        self.test_filename = "test_sample.docx"
-        self.test_content = ["Hello World", "This is a test paragraph.", "End of doc."]
-        
-        # Create and save a real .docx file
+EnvPaths = namedtuple("EnvPaths", ["dir", "docx", "docx_content", "json", "json_data"])
+
+
+@pytest.fixture
+def env() -> Iterator[EnvPaths]:
+    """Fixture to set up a temporary filesystem with valid test data."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+
+        # 1. Setup DOCX
+        docx_path = tmp_path / "test.docx"
+        content = ["Hello World", "Testing folders.", "End of file."]
         doc = Document()
-        for line in self.test_content:
+        for line in content:
             doc.add_paragraph(line)
-        doc.save(self.test_filename)
+        doc.save(str(docx_path))
 
-    def tearDown(self):
-        """Remove the dummy file after the test."""
-        if os.path.exists(self.test_filename):
-            os.remove(self.test_filename)
+        # 2. Setup JSON
+        json_path = tmp_path / "test.json"
+        data = {"app": "TextLoader", "version": 1.0}
+        json_path.write_text(json.dumps(data), encoding="utf-8")
 
-    def test_extract_text_matches_input(self):
-        """Check if extracted text matches what we wrote."""
-        loader = TextLoader(self.test_filename)
-        extracted_text = loader.extract_text_from_docx()
-        
-        # Join our original list with newlines to match your loader's output
-        expected_text = '\n'.join(self.test_content)
-        
-        self.assertEqual(extracted_text, expected_text)
+        yield EnvPaths(tmp_path, docx_path, content, json_path, data)
 
-    def test_file_not_found_raises_error(self):
-        """Ensure the class correctly raises FileNotFoundError."""
-        with self.assertRaises(FileNotFoundError):
-            TextLoader("non_existent_file.docx")
 
-if __name__ == '__main__':
-    unittest.main()
+# --- DOCX TESTS ---
+
+
+def test_extract_text_matches_input(env: EnvPaths) -> None:
+    """Verify extracted text matches the seeded document content."""
+    loader = TextLoader(env.docx)
+    assert loader.extract_text_from_docx() == "\n".join(env.docx_content)
+
+
+def test_extract_text_corrupted_docx(env: EnvPaths, caplog) -> None:
+    """Check error handling for non-zip files disguised as .docx."""
+    corrupt_path = env.dir / "corrupt.docx"
+    corrupt_path.write_bytes(b"Not a zip file")
+
+    loader = TextLoader(corrupt_path, raise_exception=True)
+    with pytest.raises((PackageNotFoundError, BadZipFile)):
+        loader.extract_text_from_docx()
+
+    loader_no_fail = TextLoader(corrupt_path, raise_exception=False)
+    assert loader_no_fail.extract_text_from_docx() is None
+    assert "Invalid or corrupted .docx" in caplog.text
+
+
+# --- JSON TESTS ---
+
+
+def test_load_json_success(env: EnvPaths) -> None:
+    """Verify loading from a valid .json file."""
+    loader = TextLoader(env.json)
+    assert loader.load_json() == env.json_data
+
+
+@pytest.mark.parametrize(
+    "raise_flag, expected_behavior", [(True, "raise"), (False, None)]
+)
+def test_load_json_invalid_format(
+    env: EnvPaths, caplog, raise_flag: bool, expected_behavior: str | None
+) -> None:
+    """Ensure malformed JSON triggers correct exception or warning."""
+    bad_json = env.dir / "bad.json"
+    bad_json.write_text("{ 'wrong': True }")
+
+    loader = TextLoader(bad_json, raise_exception=raise_flag)
+
+    if expected_behavior == "raise":
+        with pytest.raises(json.JSONDecodeError):
+            loader.load_json()
+    else:
+        assert loader.load_json() is expected_behavior
+        assert "Invalid JSON format" in caplog.text
+
+
+# --- GENERAL TESTS ---
+
+
+@pytest.mark.parametrize(
+    "raise_flag, expected_behavior", [(True, "raise"), (False, "log")]
+)
+def test_file_not_found_behavior(
+    env: EnvPaths, caplog, raise_flag: bool, expected_behavior: str
+) -> None:
+    """Verify FileNotFoundError handling and logging."""
+    missing_file = env.dir / "missing.txt"
+
+    if expected_behavior == "raise":
+        with pytest.raises(FileNotFoundError):
+            TextLoader(missing_file, raise_exception=raise_flag)
+    else:
+        TextLoader(missing_file, raise_exception=raise_flag)
+        assert "Input file not found" in caplog.text
