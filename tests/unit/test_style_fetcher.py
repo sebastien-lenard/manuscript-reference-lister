@@ -1,41 +1,43 @@
-import unittest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from manuscript_reference_lister import StyleFetcher
 
 
-class TestStyleFetcher(unittest.TestCase):
-    @patch("manuscript_reference_lister.style_fetcher.RequestsWrapper.get")
-    def test_check_style_is_valid_success(self, mock_wrapper_get):
-        # Mocking a successful API response with a list of styles
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "message": {"items": ["apa", "harvard3", "ieee", "nature"]}
-        }
-        mock_wrapper_get.return_value = mock_response
-
-        # Test with a valid style
-        fetcher = StyleFetcher("apa")
-        fetcher.check_style_is_valid()
-
-        self.assertTrue(fetcher.style_is_valid)
-        self.assertEqual(mock_wrapper_get.call_count, 1)
-
-    @patch("manuscript_reference_lister.style_fetcher.RequestsWrapper.get")
-    def test_check_style_is_valid_failure(self, mock_wrapper_get):
-        # Mocking a response where the style is missing
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"message": {"items": ["apa", "ieee"]}}
-        mock_wrapper_get.return_value = mock_response
-
-        # Test with an invalid style
-        fetcher = StyleFetcher("not-a-real-style")
-        fetcher.check_style_is_valid()
-
-        self.assertFalse(fetcher.style_is_valid)
+@pytest.fixture
+def mock_styles_response():
+    """Provides a standard successful API response mock."""
+    mock = MagicMock()
+    mock.status_code = 200
+    mock.json.return_value = {
+        "message": {"items": ["apa", "harvard3", "ieee", "nature"]}
+    }
+    return mock
 
 
-if __name__ == "__main__":
-    unittest.main()
+@patch("manuscript_reference_lister.style_fetcher.RequestsWrapper.get")
+def test_check_style_is_valid_success(
+    mock_wrapper_get: MagicMock, mock_styles_response: MagicMock
+) -> None:
+    """Verify style_is_valid is True when the style exists in the API response."""
+    mock_wrapper_get.return_value = mock_styles_response
+
+    fetcher = StyleFetcher("apa")
+    fetcher.check_style_is_valid()
+
+    assert fetcher.style_is_valid is True
+    assert mock_wrapper_get.call_count == 1
+
+
+@patch("manuscript_reference_lister.style_fetcher.RequestsWrapper.get")
+def test_check_style_is_valid_failure(
+    mock_wrapper_get: MagicMock, mock_styles_response: MagicMock
+) -> None:
+    """Verify style_is_valid is False when the style is missing from API response."""
+    mock_wrapper_get.return_value = mock_styles_response
+
+    fetcher = StyleFetcher("not-a-real-style")
+    fetcher.check_style_is_valid()
+
+    assert fetcher.style_is_valid is False

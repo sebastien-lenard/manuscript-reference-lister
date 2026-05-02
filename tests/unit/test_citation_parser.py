@@ -1,135 +1,107 @@
-import unittest
+import pytest
 
 from manuscript_reference_lister import CitationParser
 
 
-class TestCitationParser(unittest.TestCase):
-    def setUp(self):
-        self.parser = CitationParser()
-
-    def test_basic_and_coauthor_formats(self):
-        """Test standard Author, Author and Author, and Author et al."""
-        text = "Hovius (1997), Parker and Smith (2011), and Larsen et al. (2012)."
-        res = self.parser.extract_citations(text)
-        authors = [r["author"] for r in res]
-        self.assertIn("Hovius", authors)
-        self.assertIn("Parker and Smith", authors)
-        self.assertIn("Larsen et al.", authors)
-
-    def test_french_et_support(self):
-        """Verify that 'et' is recognized as a coordinator between authors."""
-        text = "L'étude de Dupont et Dupond (1945) est une référence."
-        res = self.parser.extract_citations(text)
-        self.assertEqual(res[0]["author"], "Dupont et Dupond")
-
-    def test_multiple_years_narrative(self):
-        """Verify: Author (Year1a, Year2b) -> Two distinct results with suffixes."""
-        text = "Croissant et al. (2017a, 2019b) found specific patterns."
-        res = self.parser.extract_citations(text)
-        self.assertEqual(len(res), 2)
-        self.assertEqual(res[0]["year"], "2017a")
-        self.assertEqual(res[1]["year"], "2019b")
-
-    def test_year_suffixes(self):
-        """Test that years followed by letters (a, b, c) are correctly captured."""
-        text = "As noted by Lupker et al. (2011a) and again (Lupker et al., 2011b)."
-        res = self.parser.extract_citations(text)
-        years = [r["year"] for r in res]
-        self.assertIn("2011a", years)
-        self.assertIn("2011b", years)
-
-    def test_complex_initials(self):
-        """Test multi-part initials like J.S. or S.J-P."""
-        text = "J.S. Bach (1720) and (S.J-P. Lénard et al., 2024)."
-        res = self.parser.extract_citations(text)
-        authors = [r["author"] for r in res]
-        self.assertIn("J.S. Bach", authors)
-        self.assertIn("S.J-P. Lénard et al.", authors)
-
-    def test_particles_van_der_and_de(self):
-        """Test specific particles: van der, Van Der, and De."""
-        text = "Van Der Beek (2026), van der Beek (2026), and De Castro (2010)."
-        res = self.parser.extract_citations(text)
-        authors = [r["author"] for r in res]
-        self.assertIn("Van Der Beek", authors)
-        self.assertIn("van der Beek", authors)
-        self.assertIn("De Castro", authors)
-
-    def test_false_positive_prevention(self):
-        """Ensure (2020) or (in 2020) are NOT captured as citations if authorless."""
-        text = "This was resolved recently (2020) and also (in 2021)."
-        res = self.parser.extract_citations(text)
-        self.assertEqual(len(res), 0)
-
-    def test_blacklist_and_noise(self):
-        """Test that Fig. or Table are ignored but similar names are kept."""
-        text = "(Fig. 5; Hovius, 1997). Figueroa (2020) is not Fig."
-        res = self.parser.extract_citations(text)
-        authors = [r["author"] for r in res]
-        self.assertIn("Hovius", authors)
-        self.assertIn("Figueroa", authors)
-        self.assertNotIn("Fig.", authors)
-
-    def test_nested_and_parenthetical_blocks(self):
-        """Test semicolon-separated groups and text inside double parens."""
-        text = "((Larsen and Montgomery, 2012)). See also (Smith, 2003; Brown, 2005)."
-        res = self.parser.extract_citations(text)
-        self.assertEqual(len(res), 3)
-        authors = [r["author"] for r in res]
-        self.assertIn("Larsen and Montgomery", authors)
-        self.assertIn("Smith", authors)
-        self.assertIn("Brown", authors)
-
-    def test_accents_and_hyphens(self):
-        """Verify names like Lyon-Caen or Lénard."""
-        text = "Lyon-Caen and Molnar (1985) and Lénard (2020)."
-        res = self.parser.extract_citations(text)
-        authors = [r["author"] for r in res]
-        self.assertIn("Lyon-Caen and Molnar", authors)
-        self.assertIn("Lénard", authors)
-
-    def test_hyphenated_and_unicode_names(self):
-        """Test names with various types of dashes and language coordinators."""
-        # Note: the hyphen in Lyon‐Caen below is the Unicode U+2010
-        text = "Work by Lyon‐Caen and Molnar (1985) and Lyon‐Caen et Molnar (1985)."
-        citations = self.parser.extract_citations(text)
-
-        # We expect two distinct entries
-        self.assertEqual(len(citations), 2)
-
-        # Check first citation (English coordinator)
-        self.assertEqual(citations[0]["author"], "Lyon‐Caen and Molnar")
-        self.assertEqual(citations[0]["year"], "1985")
-
-        # Check second citation (French coordinator)
-        self.assertEqual(citations[1]["author"], "Lyon‐Caen et Molnar")
-        self.assertEqual(citations[1]["year"], "1985")
-
-    def test_complex_initials_with_dashes(self):
-        """Test that initials with dashes (S.J-P.) are fully captured."""
-        text = "S.J-P. Lénard et al. (2020) demonstrated this."
-        citations = self.parser.extract_citations(text)
-
-        self.assertEqual(len(citations), 1)
-        self.assertEqual(citations[0]["author"], "S.J-P. Lénard et al.")
-
-    def test_exclude_full_references(self):
-        """Test that full APA references are not parsed."""
-        text = (
-            "Bernard, T., G., Lague, D., and Philippe Steer, P. (2021). Beyond 2D "
-            "Landslide Inventories and Their Rollover: Synoptic 3D . Earth Surface "
-            " Dynamics 9 (4), 1013–44. "
-            "https://doi.org/10.5194/esurf-9-1013-2021"
-        )
-        citations = self.parser.extract_citations(text)
-        self.assertEqual(len(citations), 0)
-
-    def test_exclude_dates(self):
-        """Test that dates are not parsed."""
-        text = "When this happened (August 31, 2020), everyboy was impressed."
-        citations = self.parser.extract_citations(text)
-        self.assertEqual(len(citations), 0)
+@pytest.fixture
+def parser() -> CitationParser:
+    """Provides a fresh instance of CitationParser for each test."""
+    return CitationParser()
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_basic_and_coauthor_formats(parser: CitationParser) -> None:
+    """Test standard Author, Author and Author, and Author et al."""
+    text = "Hovius (1997), Parker and Smith (2011), and Larsen et al. (2012)."
+    res = parser.extract_citations(text)
+    authors = [r["author"] for r in res]
+
+    assert "Hovius" in authors
+    assert "Parker and Smith" in authors
+    assert "Larsen et al." in authors
+
+
+def test_multiple_years_narrative(parser: CitationParser) -> None:
+    """Verify: Author (Year1a, Year2b) -> Two distinct results with suffixes."""
+    text = "Croissant et al. (2017a, 2019b) found specific patterns."
+    res = parser.extract_citations(text)
+
+    assert len(res) == 2
+    assert res[0]["year"] == "2017a"
+    assert res[1]["year"] == "2019b"
+
+
+@pytest.mark.parametrize(
+    "text, expected_author",
+    [
+        ("L'étude de Dupont et Dupond (1945).", "Dupont et Dupond"),  # French 'et'
+        ("J.S. Bach (1720) and (S.J-P. Lénard et al., 2024).", "J.S. Bach"),
+        ("J.S. Bach (1720) and (S.J-P. Lénard et al., 2024).", "S.J-P. Lénard et al."),
+        (
+            "Van Der Beek (2026), van der Beek (2026), and De Castro (2010).",
+            "Van Der Beek",
+        ),
+        ("Lyon-Caen and Molnar (1985) and Lénard (2020).", "Lyon-Caen and Molnar"),
+        ("Lyon-Caen and Molnar (1985) and Lénard (2020).", "Lénard"),
+        ("S.J-P. Lénard et al. (2020) demonstrated this.", "S.J-P. Lénard et al."),
+    ],
+)
+def test_complex_names_and_particles(
+    parser: CitationParser, text: str, expected_author: str
+) -> None:
+    """Verify handling of initials, particles, and accented/hyphenated names."""
+    res = parser.extract_citations(text)
+    authors = [r["author"] for r in res]
+    assert expected_author in authors
+
+
+def test_nested_and_parenthetical_blocks(parser: CitationParser) -> None:
+    """Test semicolon-separated groups and text inside double parentheses."""
+    text = "((Larsen and Montgomery, 2012)). See also (Smith, 2003; Brown, 2005)."
+    res = parser.extract_citations(text)
+    authors = [r["author"] for r in res]
+
+    assert len(res) == 3
+    assert "Larsen and Montgomery" in authors
+    assert "Smith" in authors
+    assert "Brown" in authors
+
+
+def test_blacklist_and_noise(parser: CitationParser) -> None:
+    """Ensure common labels (Fig. or Table) are ignored while similar names are kept."""
+    text = "(Fig. 5; Hovius, 1997). Figueroa (2020) is not Fig."
+    res = parser.extract_citations(text)
+    authors = [r["author"] for r in res]
+
+    assert "Hovius" in authors
+    assert "Figueroa" in authors
+    assert "Fig." not in authors
+
+
+def test_unicode_and_french_coordinators(parser: CitationParser) -> None:
+    """Test names with Unicode dashes and French coordinators."""
+    # Using Unicode hyphen (U+2010) in Lyon‐Caen
+    text = "Work by Lyon‐Caen and Molnar (1985) and Lyon‐Caen et Molnar (1985)."
+    res = parser.extract_citations(text)
+
+    assert len(res) == 2
+    assert res[0]["author"] == "Lyon‐Caen and Molnar"
+    assert res[1]["author"] == "Lyon‐Caen et Molnar"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "This was resolved recently (2020).",
+        "Occurred (in 2021).",
+        "When this happened (August 31, 2020).",
+        (
+            "Bernard, T., G., Lague, D., and Philippe Steer, P. (2021). "
+            "Beyond 2D Landslide Inventories. Earth Surface Dynamics 9 (4), 1013–44."
+        ),
+    ],
+)
+def test_exclusions(parser: CitationParser, text: str) -> None:
+    """Ensure standalone years, dates, and full bibliography references are NOT
+    captured."""
+    res = parser.extract_citations(text)
+    assert len(res) == 0

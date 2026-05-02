@@ -7,6 +7,7 @@ from .journal_parser import JournalParser
 from .requests_wrapper import RequestsWrapper
 from .style_fetcher import StyleFetcher
 from .work import Work
+from .work_fetcher import WorkFetcher
 
 # Warning: don't include packages that can call themselves in a circular way
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "RequestsWrapper",
     "StyleFetcher",
     "Work",
+    "WorkFetcher",
 ]

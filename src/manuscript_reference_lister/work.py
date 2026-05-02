@@ -1,5 +1,6 @@
 from typing import TypedDict
 
+
 class Work(TypedDict):
     name: str
     role: str
