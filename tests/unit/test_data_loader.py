@@ -9,7 +9,7 @@ import pytest
 from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
 
-from data_loader import DataLoader
+from manuscript_reference_lister import DataLoader
 
 EnvPaths = namedtuple("EnvPaths", ["dir", "docx", "docx_content", "json", "json_data"])
 
