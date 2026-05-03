@@ -1,13 +1,11 @@
 import re
 
 from . import config_loader
+from .citation_metadata import CitationMetadata
 
 
 class CitationParser:
-    """
-    Responsible for extracting and cleaning citations from raw or LaTeX text.
-    Handles narrative citations, parenthetical citations, and multiple years.
-    """
+    """Handles extraction of citations from raw text."""
 
     def __init__(self, blacklist=None):
         # Extended blacklist to avoid confusion with figures/tables
@@ -44,16 +42,26 @@ class CitationParser:
         # Matches: 1997 OR 1997a, extended to (1600-2099)
         self.year_pattern = r"\b(?:16|17|18|19|20)\d{2}[a-z]?\b"
 
-    def is_blacklisted(self, word):
+    def is_blacklisted(self, word: str) -> bool:
         """Check if a word is in the blacklist using strict matching."""
         clean_word = re.sub(r"[.,;]", "", word)
         return clean_word in self.blacklist
 
-    def extract_citations(self, text):
+    def extract_all(self, text: str) -> list[CitationMetadata]:
         """
-        Scans the text for both narrative and parenthetical citations.
-        Returns a list of dicts: {'author': str, 'year': str,
-        'type': 'narrative'|'parenthetical'}
+        Extract narrative (e.g. Hamling (2020)) and parenthetical (e.g. (Lenard et al.,
+        2020)) citations.
+        Handles complex cases:
+        - multiple years (Hovius et al., 1997, 2011)
+        - multiple citations (Jeandet et al., 2019; Lenard et al., 2020)
+        - suffixes (Lenard et al., 2020a)
+        - initials (S.J.P. Lenard et al., 2020)
+        - dashes (Lyon-Caen) and accents
+        - single author (Hamling(2020))
+        - two authors (Densmore and Hovius, 2020)
+        - French et (Densmore et Hovius, 2020)
+        - citations with ancillary words (blacklist, e.g. Fig., see, Table)
+        - don't capture isolated years (e.g. (2020)) or dates (March 6, 2020)
         """
         results = []
 
@@ -70,7 +78,11 @@ class CitationParser:
             years = re.findall(self.year_pattern, match.group(2))
             for y in years:
                 results.append(
-                    {"author": author_name, "year": y.strip(), "type": "narrative"}
+                    {
+                        "first_authors": author_name,
+                        "year_and_suffix": y.strip(),
+                        "type": "narrative",
+                    }
                 )
 
         # 2. PARENTHETICAL CITATIONS: (Hovius et al., 1997; Parker and Smith, 2011)
@@ -95,17 +107,21 @@ class CitationParser:
                     years = re.findall(f"({self.year_pattern})", clean_group)
                     for y in years:
                         results.append(
-                            {"author": author_name, "year": y, "type": "parenthetical"}
+                            {
+                                "first_authors": author_name,
+                                "year_and_suffix": y,
+                                "type": "parenthetical",
+                            }
                         )
 
         return self._deduplicate(results)
 
-    def _deduplicate(self, citations):
-        """Remove exact duplicates based on author and year."""
+    def _deduplicate(self, citations: list[CitationMetadata]) -> list[CitationMetadata]:
+        """Remove duplicates (independently from type)."""
         seen = set()
         unique_citations = []
         for c in citations:
-            identifier = (c["author"], c["year"])
+            identifier = (c["first_authors"], c["year_and_suffix"])
             if identifier not in seen:
                 seen.add(identifier)
                 unique_citations.append(c)
