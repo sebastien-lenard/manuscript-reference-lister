@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Literal
 
 from . import config_loader
-from .journal_metadata import JournalMetadata
 from .requests_wrapper import RequestsWrapper
+from .schemas.journal_metadata import JournalMetadata
 
 
 class JournalRepository:

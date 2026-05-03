@@ -1,7 +1,7 @@
 import re
 
 from . import config_loader
-from .citation_metadata import CitationMetadata
+from .schemas.citation_metadata import CitationMetadata
 
 
 class CitationParser:
