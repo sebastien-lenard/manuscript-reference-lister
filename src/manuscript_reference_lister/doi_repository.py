@@ -18,7 +18,7 @@ class DoiRepository:
             delay=config_loader.DOI_API_DELAY,
         )
 
-    def get_reference(self, doi, style):
+    def get_reference(self, doi: str, style: str = "apa") -> str:
         """Gets the reference formatted to a style and ready to include in a
         bibliography."""
         headers = {"Accept": f"text/x-bibliography; style={style}"}

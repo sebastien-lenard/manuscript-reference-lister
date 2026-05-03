@@ -6,7 +6,7 @@ import requests
 from manuscript_reference_lister import DoiFetcher
 
 
-def test_doi_service_health():
+def test_doi_service_health() -> None:
     print("Checking DOI Content Negotiation Service  via RequestsWrapper...")
     fetcher = DoiFetcher()
 
