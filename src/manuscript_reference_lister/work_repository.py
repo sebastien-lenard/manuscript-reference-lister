@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from unidecode import unidecode
 
 from . import config_loader
@@ -163,3 +166,10 @@ class WorkRepository:
                 return False
 
         return True
+
+    def save_all(self, output_filepath=None) -> None:
+        """Save the records locally."""
+        if not output_filepath:
+            output_filepath = Path(self.work_dir_path) / self.local_filename
+        with open(output_filepath, "w") as f:
+            json.dump(self.records, f, indent=4)
