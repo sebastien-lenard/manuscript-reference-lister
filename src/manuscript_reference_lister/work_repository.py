@@ -1,72 +1,73 @@
-import logging
-import time
-
 from unidecode import unidecode
 
 from . import config_loader
 from .requests_wrapper import RequestsWrapper
-from .work_metadata import WorkMetadata
+from .schemas.citation_metadata import CitationMetadata
+from .schemas.crossref_author import CrossrefAuthor
+from .schemas.work_metadata import WorkMetadata
 
 
 class WorkRepository:
-    """
-    Handles API calls to Crossref about article references
-    with multi-result support.
-    """
+    """Handles published work metadata records (for articles, book chapters, etc.)."""
 
-    def __init__(self):
+    def __init__(self, local_filename: str = "work_records.json"):
         self.email = config_loader.CROSSREF_API_EMAIL
         self.headers = {"User-Agent": f"ManuscriptRefLister/1.0 (mailto:{self.email})"}
         self.base_url = config_loader.CROSSREF_API_WORKS_URL
         self.doi_url = config_loader.DOI_API_URL
-        self.max_results = config_loader.CROSSREF_API_MAX_RESULTS
+        self.get_limit = config_loader.CROSSREF_API_WORKS_GET_LIMIT
+        self.work_dir_path = config_loader.WORK_DIR_PATH
+        self.records = []
+        self.local_filename = local_filename
         self.requests_wrapper = RequestsWrapper(
             config_loader.CROSSREF_API_EMAIL,
             timeout=config_loader.CROSSREF_API_TIMEOUT,
             max_retries=config_loader.CROSSREF_API_MAX_RETRY,
             delay=config_loader.CROSSREF_API_DELAY,
         )
-        self.works = []
 
-    def fetch_dois_for_this_info(
+    def get_work_metadata(
         self,
-        author: str,
-        year: str,
-        issn: str | None = None,
+        input_citation_metadata: CitationMetadata,
+        input_ISSN: str,
         keywords: str = "",
-        max_results: int | None = None,
+        get_limit: int | None = None,
     ) -> list[WorkMetadata]:
         """
-        Searches for references and returns a list of potential matches.
-        year: str (1600-2099), with possible suffix (a, b, etc.).
-        issn: valid issn of a journal. Without it, crossref will have troubles
-            retrieving relevant candidates.
-        keywords: either a reference or some specific words of the title. Generic
-            keywords not in the title (e.g. geosciences) will dilute crossref output.
-        Warning: these remarks are because the project uses the crossref rest api, which
-            is mostly based on article metadata, and doesn't work like google scholar,
-            which is based more on content.
+        Get work metadata, including dois, from unstructured info combining the
+        first_authors of input_citation_metadata and keywords, with results filtered on
+        the year of input_citation_metadata and input_ISSN. Number of results is capped
+        by get_limit. Works without authors are excluded.
+        Warning: This method uses the crossref api, mostly based on article metadata
+        and giving irrelevant dois if words of the work title are not in keywords. The
+        filter by a valid input_ISSN (a issn of a journal) is essential to circumvent
+        that effect.
         """
-        if not issn:
-            raise ValueError("issn is an obligatory argument (valid issn of a journal)")
-        year_int = int("".join(filter(str.isdigit, year)))
+        if not input_ISSN:
+            raise ValueError(
+                "input_ISSN is an obligatory argument (valid issn of a journal)"
+            )
+        input_first_authors_txt = input_citation_metadata["first_authors_txt"]
+        input_year_and_suffix = input_citation_metadata["year_and_suffix"]
+        year_int = int("".join(filter(str.isdigit, input_year_and_suffix)))
         if year_int < 1600 or year_int > 2099:
             raise ValueError(f"year {year_int} must be in the 1600-2099 range")
-        max_results = int(max_results) if max_results else self.max_results
+        get_limit = int(get_limit) if get_limit else self.get_limit
 
-        # Clean author string and determine the expected number of authors
-        # Logic:
-        # 1. "A et al." -> Many authors (no upper limit check)
-        # 2. "A and B" or "A & B" -> Exactly 2 authors
-        # 3. "A" -> Exactly 1 author
-        is_et_al = " et al." in author
-        raw_authors = author.split(" et al.")[0].replace(" et ", " and ").split(" and ")
+        # Number of authors (1, 2, or > 2)
+        is_et_al = " et al." in input_first_authors_txt
+        raw_authors = (
+            input_first_authors_txt.split(" et al.")[0]
+            .replace(" et ", " and ")
+            .split(" and ")
+        )
         expected_count = len(raw_authors) if not is_et_al else None
 
         params = {
-            "query": f"{author} {keywords}",
-            "rows": max_results,
-            "filter": f"from-pub-date:{year_int},until-pub-date:{year_int},issn:{issn}",
+            "query": f"{input_first_authors_txt} {keywords}",
+            "rows": get_limit,
+            "filter": f"from-pub-date:{year_int},until-pub-date:{year_int},"
+            f"issn:{input_ISSN}",
         }
 
         response = self.requests_wrapper.get(
@@ -79,16 +80,20 @@ class WorkRepository:
         candidates = []
 
         for item in items:
-            if not self._validate_first_author(item, raw_authors, expected_count):
+            if "author" not in item:
+                continue
+
+            if not self._validate_first_authors(
+                item["author"], raw_authors, expected_count
+            ):
                 continue
             doi = item.get("DOI")
             if doi:
                 candidates.append(
                     {
-                        "req_author": author,
-                        "req_year": year,
-                        "req_issn": issn,
-                        "req_keywords": keywords,
+                        "input_first_authors_txt": input_first_authors_txt,
+                        "input_year_and_suffix": input_year_and_suffix,
+                        "input_ISSN": input_ISSN,
                         "reference": "",
                         "style": "",
                         "doi": self.doi_url.replace("{doi}", str(doi)),
@@ -107,36 +112,33 @@ class WorkRepository:
             return ""
         return unidecode(text).lower().strip()
 
-    def _validate_first_author(
-        self, item: dict, expected_authors: list[str], expected_count: int | None = None
+    def _validate_first_authors(
+        self,
+        crossref_authors: list[CrossrefAuthor],
+        input_first_authors: list[str],
+        input_first_authors_count: int | None = None,
     ) -> bool:
         """
-        Validates the authors based on the expected list and count.
-        Validates if the first author of the Crossref item matches the expected author.
+        Validates if the first crossref_authors match the input_first_authors, and if
+        number of authors match too if 1 or 2 authors only.
         Warning: strict comparison, case insensitive. If name slightly differs (e.g.
         VanDijk vs Van Dijk, comparison returns False)
-
-        Args:
-            item: The work item dictionary from Crossref.
-            expected_author: The surname/name of the author to match.
-
-        Returns:
-            bool: True if a match is found, False otherwise.
         """
-        authors = item.get("author", [])
-        if not authors:
-            return False
 
         # 1. Strict count validation if not an "et al." citation
-        if expected_count is not None and len(authors) != expected_count:
+        if (
+            input_first_authors_count is not None
+            and len(crossref_authors) != input_first_authors_count
+        ):
             return False
 
-        norm_expected = [self._normalize_string(a) for a in expected_authors]
+        norm_expected = [self._normalize_string(a) for a in input_first_authors]
 
         # 2. Validate the primary (first) author.
         # Fallback to the first element in the list if 'sequence' key is missing.
         first_author_obj = next(
-            (a for a in authors if a.get("sequence") == "first"), authors[0]
+            (a for a in crossref_authors if a.get("sequence") == "first"),
+            crossref_authors[0],
         )
         norm_first_family = self._normalize_string(
             first_author_obj.get("family", first_author_obj.get("name", ""))
@@ -149,9 +151,11 @@ class WorkRepository:
                 return False
 
         # 3. Validate second author if exactly two are expected
-        if expected_count == 2:
+        if input_first_authors_count == 2:
             # The second author is the one that is NOT the first_author_obj
-            second_author_obj = [a for a in authors if a != first_author_obj][0]
+            second_author_obj = [a for a in crossref_authors if a != first_author_obj][
+                0
+            ]
             norm_second_family = self._normalize_string(
                 second_author_obj.get("family", second_author_obj.get("name", ""))
             )
@@ -159,60 +163,3 @@ class WorkRepository:
                 return False
 
         return True
-
-    def update(self):
-        """Find works and sets doi in self.work_info_list.
-        Update is restricted to a max number of works, and method doesnt save the
-        list to a file."""
-
-        # 1. Identify and categorize records needing attention
-        needs_info = []  # Priority 1: Missing data (None)
-        needs_refresh = []  # Priority 2: Old data (Date expired)
-        complete = []  # No update needed
-
-        for record in self.journal_info_list:
-            if None in record.values():
-                needs_info.append(record)
-            elif last_update < cutoff_date:
-                needs_refresh.append(record)
-            else:
-                complete.append(record)
-
-        # 2. Process updates with a limit
-        final_list = complete
-        to_process = needs_info + needs_refresh  # Missing info comes first
-        calls_made = 0
-        last_display_time = time.time()
-        total_to_process = len(to_process)
-        remaining_updates = 0
-
-        for i, record in enumerate(to_process):
-            if calls_made < self.update_max:
-                new_data = self.get_issns_and_dates_by_name(record["requested_title"])
-                if new_data:
-                    final_list.extend(new_data)
-                else:
-                    final_list.append(record)
-                calls_made += 1
-            else:
-                # We hit the limit; keep the old record and count it for the warning
-                final_list.append(record)
-                remaining_updates = len(to_process) - i
-                break
-            # Display update every 10 seconds
-            if time.time() - last_display_time > 10:
-                remaining = total_to_process - (i + 1)
-                print(
-                    f"Status: {remaining} updates remaining out of {total_to_process}..."
-                )
-                last_display_time = time.time()
-
-        # 3. Handle Warning and Flag
-        if remaining_updates > 0:
-            self.has_pending_updates = True
-            logging.warning(
-                "Journal update limit reached. %d records still need updating.",
-                remaining_updates,
-            )
-
-        self.journal_info_list = final_list

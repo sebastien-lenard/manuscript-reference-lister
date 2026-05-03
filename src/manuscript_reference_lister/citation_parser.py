@@ -79,7 +79,7 @@ class CitationParser:
             for y in years:
                 results.append(
                     {
-                        "first_authors": author_name,
+                        "first_authors_txt": author_name,
                         "year_and_suffix": y.strip(),
                         "type": "narrative",
                     }
@@ -108,7 +108,7 @@ class CitationParser:
                     for y in years:
                         results.append(
                             {
-                                "first_authors": author_name,
+                                "first_authors_txt": author_name,
                                 "year_and_suffix": y,
                                 "type": "parenthetical",
                             }
@@ -121,7 +121,7 @@ class CitationParser:
         seen = set()
         unique_citations = []
         for c in citations:
-            identifier = (c["first_authors"], c["year_and_suffix"])
+            identifier = (c["first_authors_txt"], c["year_and_suffix"])
             if identifier not in seen:
                 seen.add(identifier)
                 unique_citations.append(c)

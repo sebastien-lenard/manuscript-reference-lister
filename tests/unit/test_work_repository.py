@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from manuscript_reference_lister import WorkRepository
+from manuscript_reference_lister.schemas import CrossrefAuthor
 
 
 @pytest.fixture
@@ -11,19 +12,23 @@ def repo() -> WorkRepository:
     return WorkRepository()
 
 
-@patch("manuscript_reference_lister.work_repository.RequestsWrapper.get")
-def test_fetch_not_found(mock_get: MagicMock, repo: WorkRepository) -> None:
+def test_fetch_not_found(repo: WorkRepository) -> None:
     """Verify behavior when no results are found (returns empty list)."""
     mock_resp = MagicMock(status_code=200)
     mock_resp.json.return_value = {"message": {"items": []}}
-    mock_get.return_value = mock_resp
 
-    result = repo.fetch_dois_for_this_info("UnknownAuthor", "2025", issn="1752-0894")
-    assert result == []
+    with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
+        result = repo.get_work_metadata(
+            {
+                "first_authors_txt": "UnknownAuthor",
+                "year_and_suffix": "2025",
+            },
+            input_ISSN="1752-0894",
+        )
+        assert result == []
 
 
-@patch("manuscript_reference_lister.work_repository.RequestsWrapper.get")
-def test_returns_multiple_candidates(mock_get: MagicMock, repo: WorkRepository) -> None:
+def test_returns_multiple_candidates(repo: WorkRepository) -> None:
     """Verify that the repo identifies and returns multiple valid candidates."""
     mock_resp = MagicMock(status_code=200)
     mock_resp.json.return_value = {
@@ -42,36 +47,42 @@ def test_returns_multiple_candidates(mock_get: MagicMock, repo: WorkRepository) 
             ]
         }
     }
-    mock_get.return_value = mock_resp
+
     repo._get_formatted_full_reference = MagicMock(return_value="APA String")
 
-    results = repo.fetch_dois_for_this_info("Lenard et al.", "2020", issn="1752-0894")
+    with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
+        results = repo.get_work_metadata(
+            {"first_authors_txt": "Lenard et al.", "year_and_suffix": "2020"},
+            input_ISSN="1752-0894",
+        )
+        assert len(results) == 2
+        assert results[0]["type"] == "journal-article"
+        assert results[0]["doi"] == "https://doi.org/10.1038/s41561-020-0585-2"
+        assert results[1]["type"] == "proceedings-article"
 
-    assert len(results) == 2
-    assert results[0]["type"] == "journal-article"
-    # Fixed: Match the full constructed DOI URL
-    assert results[0]["doi"] == "https://doi.org/10.1038/s41561-020-0585-2"
-    assert results[1]["type"] == "proceedings-article"
 
-
-@patch("manuscript_reference_lister.work_repository.RequestsWrapper.get")
-def test_parameterized_keywords(mock_get: MagicMock, repo: WorkRepository) -> None:
+def test_parameterized_keywords(repo: WorkRepository) -> None:
     """Verify that custom keywords are correctly injected into the API query."""
     mock_resp = MagicMock(status_code=200)
     mock_resp.json.return_value = {"message": {"items": []}}
-    mock_get.return_value = mock_resp
 
     custom_kws = "Shifts in landslide frequency–area distribution"
-    repo.fetch_dois_for_this_info(
-        "Guns and Vanacker", "2014", issn="2213-3054", keywords=custom_kws
-    )
 
-    _, kwargs = mock_get.call_args
-    assert custom_kws in kwargs.get("params", {}).get("query", "")
+    with patch.object(repo.requests_wrapper, "get", return_value=mock_resp) as mock_get:
+        repo.get_work_metadata(
+            {
+                "first_authors_txt": "Guns and Vanacker",
+                "year_and_suffix": "2014",
+            },
+            input_ISSN="2213-3054",
+            keywords=custom_kws,
+        )
+
+        _, kwargs = mock_get.call_args
+        assert custom_kws in kwargs.get("params", {}).get("query", "")
 
 
-@patch("manuscript_reference_lister.work_repository.RequestsWrapper.get")
-def test_author_validation_filtering(mock_get: MagicMock, repo: WorkRepository) -> None:
+def test_author_validation_filtering(repo: WorkRepository) -> None:
     """Verify that candidates with non-matching first authors are filtered out."""
     mock_resp = MagicMock(status_code=200)
     mock_resp.json.return_value = {
@@ -92,63 +103,97 @@ def test_author_validation_filtering(mock_get: MagicMock, repo: WorkRepository) 
             ]
         }
     }
-    mock_get.return_value = mock_resp
 
-    results = repo.fetch_dois_for_this_info("Guns et al.", "2014", issn="2213-3054")
-
-    assert len(results) == 2
-    assert results[0]["doi"] == "https://doi.org/10.1/match"
-    assert results[1]["doi"] == "https://doi.org/10.1/inverted"
+    with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
+        results = repo.get_work_metadata(
+            {
+                "first_authors_txt": "Guns et al.",
+                "year_and_suffix": "2014",
+            },
+            input_ISSN="2213-3054",
+        )
+        assert len(results) == 2
+        assert results[0]["doi"] == "https://doi.org/10.1/match"
+        assert results[1]["doi"] == "https://doi.org/10.1/inverted"
 
 
 @pytest.mark.parametrize(
-    "item, search_authors, expected_count, expected_result",
+    "crossref_authors, input_first_authors, input_first_authors_count, expected_result",
     [
-        ({"author": [{"family": "Lenard", "sequence": "first"}]}, ["Lenard"], 1, True),
-        ({"author": [{"name": "Lenard"}]}, ["Lenard"], 1, True),
-        ({"author": [{"family": "Van Dijk"}]}, ["  van dijk  "], 1, True),
-        ({"author": [{"family": "Zappa"}]}, ["Hendrix"], 1, False),
-        ({"author": [{"family": "Lénárd"}]}, ["Lenard"], 1, True),
-        ({"author": [{"family": "François"}]}, ["Francois"], 1, True),
-        ({"author": [{"family": "Łukasiewicz"}]}, ["Lukasiewicz"], 1, True),
-        ({"author": [{"family": "Peña"}]}, ["Pena"], 1, True),
-        ({"author": [{"family": "Erdős"}]}, ["Erdos"], 1, True),
-        ({"author": [{"family": "Lenard"}, {"family": "Smith"}]}, ["Lenard"], 1, False),
+        ([{"family": "Lenard", "sequence": "first"}], ["Lenard"], 1, True),
+        ([{"name": "Lenard", "sequence": "first"}], ["Lenard"], 1, True),
+        ([{"family": "Van Dijk", "sequence": "first"}], ["  van dijk  "], 1, True),
+        ([{"family": "Zappa", "sequence": "first"}], ["Hendrix"], 1, False),
+        ([{"family": "Lénárd", "sequence": "first"}], ["Lenard"], 1, True),
+        ([{"family": "François", "sequence": "first"}], ["Francois"], 1, True),
+        ([{"family": "Łukasiewicz", "sequence": "first"}], ["Lukasiewicz"], 1, True),
+        ([{"family": "Peña", "sequence": "first"}], ["Pena"], 1, True),
+        ([{"family": "Erdős", "sequence": "first"}], ["Erdos"], 1, True),
+        # Testing count mismatch (expected 1, got 2)
         (
-            {"author": [{"family": "Guns"}, {"family": "Vanacker"}]},
+            [
+                {"family": "Lenard", "sequence": "first"},
+                {"family": "Smith", "sequence": "additional"},
+            ],
+            ["Lenard"],
+            1,
+            False,
+        ),
+        # Testing two authors match
+        (
+            [
+                {"family": "Guns", "sequence": "first"},
+                {"family": "Vanacker", "sequence": "additional"},
+            ],
             ["guns", "vanacker"],
             2,
             True,
         ),
+        # Testing two authors, second fails
         (
-            {"author": [{"family": "Guns"}, {"family": "Dupont"}]},
+            [
+                {"family": "Guns", "sequence": "first"},
+                {"family": "Dupont", "sequence": "additional"},
+            ],
             ["guns", "vanacker"],
             2,
             False,
         ),
+        # Testing two authors, count is 2 but list has 3
         (
-            {"author": [{"family": "Guns"}, {"family": "V"}, {"family": "T"}]},
+            [
+                {"family": "Guns", "sequence": "first"},
+                {"family": "V", "sequence": "additional"},
+                {"family": "T", "sequence": "additional"},
+            ],
             ["guns", "v"],
             2,
             False,
         ),
+        # Testing et al. (expected_count is None)
         (
-            {"author": [{"family": "Lenard"}, {"family": "A"}, {"family": "B"}]},
+            [
+                {"family": "Lenard", "sequence": "first"},
+                {"family": "A", "sequence": "additional"},
+                {"family": "B", "sequence": "additional"},
+            ],
             ["lenard"],
             None,
             True,
         ),
     ],
 )
-def test_validate_first_author_logic(
+def test_validate_first_authors_logic(
     repo: WorkRepository,
-    item: dict,
-    search_authors: list,
-    expected_count: int,
+    crossref_authors: list[CrossrefAuthor],
+    input_first_authors: list,
+    input_first_authors_count: int,
     expected_result: bool,
 ) -> None:
     """Directly test author validation logic across naming and count scenarios."""
     assert (
-        repo._validate_first_author(item, search_authors, expected_count)
+        repo._validate_first_authors(
+            crossref_authors, input_first_authors, input_first_authors_count
+        )
         == expected_result
     )
