@@ -6,7 +6,7 @@ from manuscript_reference_lister import StyleRepository
 
 
 @pytest.fixture
-def mock_styles_response():
+def mock_styles_response() -> None:
     """Provides a standard successful API response mock."""
     mock = MagicMock()
     mock.status_code = 200

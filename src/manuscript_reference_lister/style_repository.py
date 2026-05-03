@@ -20,7 +20,7 @@ class StyleRepository:
             delay=config_loader.CROSSREF_API_DELAY,
         )
 
-    def validate_favored_style(self):
+    def validate_favored_style(self) -> None:
         """Check is the favored reference style is in the repository and supported."""
         response = self.requests_wrapper.get(self.base_url, headers=self.headers)
         valid_styles = response.json()["message"]["items"]

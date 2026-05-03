@@ -3,14 +3,14 @@ import traceback
 
 import requests
 
-from manuscript_reference_lister import StyleFetcher, config_loader
+from manuscript_reference_lister import StyleRepository, config_loader
 
 
-def check_style_api_health():
-    print("Checking Crossref Style API health  via RequestsWrapper...")
+def check_style_api_health() -> None:
+    print("Checking Crossref Style API health via RequestsWrapper...")
 
     # 'apa' is a standard style that should always exist
-    fetcher = StyleFetcher("apa")
+    repo = StyleRepository("apa")
     headers = {
         "User-Agent": f"ManuscriptRefLister/1.0 (mailto:{
             config_loader.CROSSREF_API_EMAIL
@@ -18,11 +18,11 @@ def check_style_api_health():
     }
 
     try:
-        fetcher.check_style_is_valid()
+        repo.validate_favored_style()
 
-        if fetcher.style_is_valid is True:
+        if repo.favored_style_is_valid is True:
             print("[OK] Style API is reachable and 'apa' was found.")
-        elif fetcher.style_is_valid is False:
+        elif repo.favored_style_is_valid is False:
             print("[FAIL] API reachable, but 'apa' style was not found in the list.")
             sys.exit(1)
         else:
@@ -30,8 +30,8 @@ def check_style_api_health():
             sys.exit(1)
 
         # Check for Polite Pool headers for extra safety
-        response = fetcher.requests_wrapper.get(
-            fetcher.base_url, headers=headers, max_retries=1
+        response = repo.requests_wrapper.get(
+            repo.base_url, headers=headers, max_retries=1
         )
 
         limit = response.headers.get("X-Rate-Limit-Limit")
