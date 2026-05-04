@@ -1,7 +1,7 @@
 import re
 
-from manuscript_reference_lister import config_loader
 from manuscript_reference_lister.schemas import CitationMetadata
+from manuscript_reference_lister.utils import config_loader
 
 
 class CitationParser:

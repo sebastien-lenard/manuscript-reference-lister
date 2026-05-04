@@ -3,8 +3,8 @@ import traceback
 
 import requests
 
-from manuscript_reference_lister import config_loader
 from manuscript_reference_lister.repositories import StyleRepository
+from manuscript_reference_lister.utils import config_loader
 
 
 def check_style_api_health() -> None:

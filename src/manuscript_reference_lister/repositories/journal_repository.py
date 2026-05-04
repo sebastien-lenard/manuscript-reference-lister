@@ -3,8 +3,8 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from manuscript_reference_lister import config_loader
 from manuscript_reference_lister.schemas import JournalMetadata, is_journal_metadata
+from manuscript_reference_lister.utils import config_loader
 
 from .base_repository import BaseRepository
 

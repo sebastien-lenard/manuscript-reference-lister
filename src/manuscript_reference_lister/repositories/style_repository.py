@@ -1,6 +1,6 @@
 import logging
 
-from manuscript_reference_lister import RequestsWrapper, config_loader
+from manuscript_reference_lister.utils import RequestsWrapper, config_loader
 
 
 class StyleRepository:

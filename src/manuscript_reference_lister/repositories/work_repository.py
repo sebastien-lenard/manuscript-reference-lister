@@ -1,12 +1,12 @@
 from unidecode import unidecode
 
-from manuscript_reference_lister import config_loader
 from manuscript_reference_lister.schemas import (
     CitationMetadata,
     CrossrefAuthor,
     WorkMetadata,
     is_work_metadata,
 )
+from manuscript_reference_lister.utils import config_loader
 
 from .base_repository import BaseRepository
 
