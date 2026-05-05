@@ -6,7 +6,7 @@ import requests
 from manuscript_reference_lister.repositories import DoiRepository
 
 
-def test_doi_service_health() -> None:
+def test_doi_api_service_health() -> None:
     print("Checking DOI Content Negotiation Service  via RequestsWrapper...")
     repo = DoiRepository()
 
@@ -56,4 +56,4 @@ def test_doi_service_health() -> None:
 
 
 if __name__ == "__main__":
-    test_doi_service_health()
+    test_doi_api_service_health()

@@ -1,5 +1,3 @@
-import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,11 +7,9 @@ from manuscript_reference_lister.schemas import CrossrefAuthor
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> WorkRepository:
+def repo() -> WorkRepository:
     """Provides a fresh instance of WorkRepository for each test."""
-    repo = WorkRepository()
-    repo.local_repo_dir_path = str(tmp_path)
-    return repo
+    return WorkRepository()
 
 
 def test_fetch_not_found(repo: WorkRepository) -> None:
@@ -201,23 +197,3 @@ def test_validate_first_authors_logic(
         )
         == expected_result
     )
-
-
-def test_save_all(repo: WorkRepository) -> None:
-    """Verify that the work list is saved correctly to the work directory."""
-    initial_records = [
-        {
-            "input_first_authors_txt": "Lenard et al.",
-            "input_year_and_suffix": "2020a",
-            "input_ISSN": "1752-0894",
-            "doi": "10.1038/s41561-020-0585-2",
-        }
-    ]
-    repo.records = initial_records
-    expected_path = Path(repo.local_repo_dir_path) / repo.local_filename
-
-    repo.save_all()
-
-    assert expected_path.exists()
-    saved_records = json.loads(expected_path.read_text())
-    assert saved_records == initial_records

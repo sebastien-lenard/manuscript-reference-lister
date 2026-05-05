@@ -4,7 +4,6 @@ import traceback
 import requests
 
 from manuscript_reference_lister.repositories import JournalRepository
-from manuscript_reference_lister.utils import config_loader
 
 
 def check_integ_journals_api_health() -> None:
@@ -14,9 +13,7 @@ def check_integ_journals_api_health() -> None:
     )
     repo = JournalRepository()
     headers = {
-        "User-Agent": f"ManuscriptRefLister/1.0 (mailto:{
-            config_loader.CROSSREF_API_EMAIL
-        })"
+        "User-Agent": f"ManuscriptRefLister/1.0 (mailto:{repo.config.crossref_api_email})"
     }
 
     # Using a known journal
@@ -26,7 +23,7 @@ def check_integ_journals_api_health() -> None:
         # On utilise le wrapper du repo.
         # On force max_retries=1 pour un diagnostic "sec" sans répétition.
         response = repo.requests_wrapper.get(
-            repo.base_url,
+            repo.config.crossref_api_journals_url,
             params={"query": input_title, "rows": 1},
             headers=headers,
             max_retries=1,

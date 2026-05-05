@@ -4,23 +4,28 @@ from pathlib import Path
 import pytest
 
 from manuscript_reference_lister.repositories import BaseRepository
+from manuscript_reference_lister.utils import AppConfig, get_config
 
 
 class MockRepository(BaseRepository[dict]):
-    def __init__(self, local_filename: str, local_dir: str):
-        # We pass a simple lambda as the validator
+    def __init__(self, local_filename: str, local_dir: str, config=None):
         super().__init__(
-            local_filename, validator=lambda x: isinstance(x, dict) and "id" in x
+            local_filename,
+            validator=lambda x: isinstance(x, dict) and "id" in x,
+            config=config,
         )
         self.local_repo_dir_path = local_dir
 
 
 @pytest.fixture
 def base_repo(tmp_path: Path) -> MockRepository:
-    return MockRepository("test_base_records.json", str(tmp_path))
+    """Mock repo with a dummy config pointing to the temp directory"""
+    current_cfg = get_config()
+    test_config = AppConfig(**{**current_cfg.__dict__, "local_repo_dir_path": tmp_path})
+    return MockRepository("test_base_records.json", str(tmp_path), config=test_config)
 
 
-def test_load_all_success(base_repo: MockRepository) -> None:
+def test_load_all_successq(base_repo: MockRepository) -> None:
     """Verify loading valid data into records."""
     path = Path(base_repo.local_repo_dir_path) / base_repo.local_filename
     valid_data = [{"id": 1}, {"id": 2}]

@@ -4,7 +4,6 @@ import traceback
 import requests
 
 from manuscript_reference_lister.repositories import StyleRepository
-from manuscript_reference_lister.utils import config_loader
 
 
 def check_style_api_health() -> None:
@@ -13,9 +12,7 @@ def check_style_api_health() -> None:
     # 'apa' is a standard style that should always exist
     repo = StyleRepository("apa")
     headers = {
-        "User-Agent": f"ManuscriptRefLister/1.0 (mailto:{
-            config_loader.CROSSREF_API_EMAIL
-        })"
+        "User-Agent": f"ManuscriptRefLister/1.0 (mailto:{repo.config.crossref_api_email})"
     }
 
     try:
@@ -32,7 +29,7 @@ def check_style_api_health() -> None:
 
         # Check for Polite Pool headers for extra safety
         response = repo.requests_wrapper.get(
-            repo.base_url, headers=headers, max_retries=1
+            repo.config.crossref_api_styles_url, headers=headers, max_retries=1
         )
 
         limit = response.headers.get("X-Rate-Limit-Limit")

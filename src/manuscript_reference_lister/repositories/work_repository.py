@@ -6,7 +6,7 @@ from manuscript_reference_lister.schemas import (
     WorkMetadata,
     is_work_metadata,
 )
-from manuscript_reference_lister.utils import config_loader
+from manuscript_reference_lister.utils import AppConfig
 
 from .base_repository import BaseRepository
 
@@ -14,11 +14,10 @@ from .base_repository import BaseRepository
 class WorkRepository(BaseRepository[WorkMetadata]):
     """Handles published work metadata records (for articles, book chapters, etc.)."""
 
-    def __init__(self, local_filename: str = "work_records.json"):
-        super().__init__(local_filename, validator=is_work_metadata)
-        self.base_url = config_loader.CROSSREF_API_WORKS_URL
-        self.doi_url = config_loader.DOI_API_URL
-        self.get_limit = config_loader.CROSSREF_API_WORKS_GET_LIMIT
+    def __init__(
+        self, local_filename: str = "work_records.json", config: AppConfig | None = None
+    ):
+        super().__init__(local_filename, validator=is_work_metadata, config=config)
 
     def get_work_metadata(
         self,
@@ -46,7 +45,9 @@ class WorkRepository(BaseRepository[WorkMetadata]):
         year_int = int("".join(filter(str.isdigit, input_year_and_suffix)))
         if year_int < 1600 or year_int > 2099:
             raise ValueError(f"year {year_int} must be in the 1600-2099 range")
-        get_limit = int(get_limit) if get_limit else self.get_limit
+        get_limit = (
+            int(get_limit) if get_limit else self.config.crossref_api_works_get_limit
+        )
 
         # Number of authors (1, 2, or > 2)
         is_et_al = " et al." in input_first_authors_txt
@@ -65,7 +66,7 @@ class WorkRepository(BaseRepository[WorkMetadata]):
         }
 
         response = self.requests_wrapper.get(
-            self.base_url, headers=self.headers, params=params
+            self.config.crossref_api_works_url, headers=self.headers, params=params
         )
         response.raise_for_status()
         data = response.json()
@@ -90,7 +91,7 @@ class WorkRepository(BaseRepository[WorkMetadata]):
                         "input_ISSN": input_ISSN,
                         "reference": "",
                         "style": "",
-                        "doi": self.doi_url.replace("{doi}", str(doi)),
+                        "doi": self.config.doi_api_url.replace("{doi}", str(doi)),
                         "type": item.get("type", "unknown"),
                     }
                 )

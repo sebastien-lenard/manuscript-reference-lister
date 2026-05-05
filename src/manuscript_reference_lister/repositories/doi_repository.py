@@ -2,19 +2,19 @@ import logging
 
 import requests
 
-from manuscript_reference_lister.utils import RequestsWrapper, config_loader
+from manuscript_reference_lister.utils import AppConfig, RequestsWrapper, get_config
 
 
 class DoiRepository:
     """Handles information specific to the DOI of a work."""
 
-    def __init__(self):
-        self.base_url = config_loader.DOI_API_URL
+    def __init__(self, config: AppConfig | None = None):
+        self.config = config or get_config()
         self.requests_wrapper = RequestsWrapper(
-            config_loader.CROSSREF_API_EMAIL,
-            timeout=config_loader.DOI_API_TIMEOUT,
-            max_retries=config_loader.DOI_API_MAX_RETRY,
-            delay=config_loader.DOI_API_DELAY,
+            self.config.crossref_api_email,
+            timeout=self.config.doi_api_timeout,
+            max_retries=self.config.doi_api_max_retry,
+            delay=self.config.doi_api_delay,
         )
 
     def get_reference(self, doi: str, style: str = "apa") -> str:
@@ -29,7 +29,7 @@ class DoiRepository:
 
         try:
             res = self.requests_wrapper.get(
-                self.base_url.replace("{doi}", str(doi)), headers=headers
+                self.config.doi_api_url.replace("{doi}", str(doi)), headers=headers
             )  # DOI Content Negotiation Service
             return res.text.strip()
         except requests.exceptions.HTTPError as e:

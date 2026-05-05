@@ -1,15 +1,18 @@
 import re
 
 from manuscript_reference_lister.schemas import CitationMetadata
-from manuscript_reference_lister.utils import config_loader
+from manuscript_reference_lister.utils import AppConfig, get_config
 
 
 class CitationParser:
     """Handles extraction of citations from raw text."""
 
-    def __init__(self, blacklist=None):
+    def __init__(
+        self, blacklist: list[str] | None = None, config: AppConfig | None = None
+    ):
         # Extended blacklist to avoid confusion with figures/tables
-        self.blacklist = blacklist or config_loader.PARSER_DEFAULT_BLACKLIST
+        config = config or get_config()
+        self.blacklist = (config or get_config()).parser_blacklist
 
         # Universal dash handling (standard, unicode 2010-2015)
         dash_range = r"-\u2010-\u2015"

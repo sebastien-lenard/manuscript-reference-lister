@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Literal
 
 from manuscript_reference_lister.schemas import JournalMetadata, is_journal_metadata
-from manuscript_reference_lister.utils import config_loader
+from manuscript_reference_lister.utils import AppConfig
 
 from .base_repository import BaseRepository
 
@@ -12,13 +12,12 @@ from .base_repository import BaseRepository
 class JournalRepository(BaseRepository[JournalMetadata]):
     """Handles journal metadata records."""
 
-    def __init__(self, local_filename: str = "journal_records.json"):
-        super().__init__(local_filename, validator=is_journal_metadata)
-
-        self.base_url = config_loader.CROSSREF_API_JOURNALS_URL
-        self.issn_url = config_loader.CROSSREF_API_JOURNALS_ISSN_URL
-        self.update_days = config_loader.JOURNAL_UPDATE_DAYS
-        self.update_limit = config_loader.JOURNAL_UPDATE_LIMIT
+    def __init__(
+        self,
+        local_filename: str = "journal_records.json",
+        config: AppConfig | None = None,
+    ):
+        super().__init__(local_filename, validator=is_journal_metadata, config=config)
         self.has_pending_updates = False
 
     def get_journal_metadata(self, input_title: str) -> list[JournalMetadata]:
@@ -33,12 +32,12 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         params = {
             "query": input_title,
             "rows": 200,  # Large batch to find all matches
-            "mailto": self.email,
+            "mailto": self.config.crossref_api_email,
         }
 
         journal_records = []
         response = self.requests_wrapper.get(
-            self.base_url, params=params, headers=self.headers
+            self.config.crossref_api_journals_url, params=params, headers=self.headers
         )
         response.raise_for_status()
 
@@ -104,9 +103,14 @@ class JournalRepository(BaseRepository[JournalMetadata]):
     ) -> int | None:
         """Get the year of the oldest (order: asc) or the newest (order: desc) published
         work (no distinction print or online) for the ISSN."""
-        params = {"sort": "published", "order": order, "rows": 1, "mailto": self.email}
+        params = {
+            "sort": "published",
+            "order": order,
+            "rows": 1,
+            "mailto": self.config.crossref_api_email,
+        }
         response = self.requests_wrapper.get(
-            self.issn_url.replace("{issn}", str(issn)),
+            self.config.crossref_api_journals_issn_url.replace("{issn}", str(issn)),
             params=params,
             headers=self.headers,
         )
@@ -129,7 +133,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         Warning: Update restricted to a max number of journals, doesn't include
         regular local saving of the updates."""
 
-        expiration_date = date.today() - timedelta(days=self.update_days)
+        expiration_date = date.today() - timedelta(days=self.config.journal_update_days)
         missing_metadata = []
         expired_metadata = []
         valid_metadata = []
@@ -154,7 +158,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         update_remaining = 0
 
         for i, record in enumerate(records_to_update):
-            if update_count < self.update_limit:
+            if update_count < self.config.journal_update_limit:
                 new_data = self.get_journal_metadata(record["input_title"])
                 if new_data:
                     valid_metadata.extend(new_data)

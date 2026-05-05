@@ -3,7 +3,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar
 
-from manuscript_reference_lister.utils import DataLoader, RequestsWrapper, config_loader
+from manuscript_reference_lister.utils import (
+    AppConfig,
+    DataLoader,
+    RequestsWrapper,
+    get_config,
+)
 
 T = TypeVar("T")
 
@@ -11,18 +16,25 @@ T = TypeVar("T")
 class BaseRepository[T]:
     """Base class for repositories that handle JSON storage."""
 
-    def __init__(self, local_filename: str, validator: Callable[[Any], bool]):
-        self.email = config_loader.CROSSREF_API_EMAIL
-        self.headers = {"User-Agent": f"ManuscriptRefLister/1.0 (mailto:{self.email})"}
-        self.local_repo_dir_path = config_loader.LOCAL_REPO_DIR_PATH
+    def __init__(
+        self,
+        local_filename: str,
+        validator: Callable[[Any], bool],
+        config: AppConfig | None = None,
+    ):
+        self.config = config or get_config()
+        self.headers = {
+            "User-Agent": f"ManuscriptRefLister/1.0 (mailto:"
+            f"{self.config.crossref_api_email})"
+        }
         self.local_filename = local_filename
         self.validator = validator
         self.records: list[T] = []
         self.requests_wrapper = RequestsWrapper(
-            self.email,
-            timeout=config_loader.CROSSREF_API_TIMEOUT,
-            max_retries=config_loader.CROSSREF_API_MAX_RETRY,
-            delay=config_loader.CROSSREF_API_DELAY,
+            self.config.crossref_api_email,
+            timeout=self.config.crossref_api_timeout,
+            max_retries=self.config.crossref_api_max_retry,
+            delay=self.config.crossref_api_delay,
         )
 
     def __len__(self) -> int:
@@ -31,7 +43,8 @@ class BaseRepository[T]:
     def load_all(self, input_filepath: str | Path | None = None) -> None:
         """Load local records and validate against the schema."""
         path = Path(
-            input_filepath or Path(self.local_repo_dir_path) / self.local_filename
+            input_filepath
+            or Path(self.config.local_repo_dir_path) / self.local_filename
         )
         data = DataLoader(path, raise_exception=False).load_json(self.validator)
         self.records = data if data is not None else []
@@ -39,7 +52,8 @@ class BaseRepository[T]:
     def save_all(self, output_filepath: str | Path | None = None) -> None:
         """Saves records atomically using temporary files."""
         output_filepath = Path(
-            output_filepath or Path(self.local_repo_dir_path) / self.local_filename
+            output_filepath
+            or Path(self.config.local_repo_dir_path) / self.local_filename
         )
 
         json_data = json.dumps(self.records, indent=4, ensure_ascii=False)

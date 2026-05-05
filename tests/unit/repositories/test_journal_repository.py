@@ -1,7 +1,6 @@
-import json
 import logging
+from dataclasses import replace
 from datetime import date, timedelta
-from pathlib import Path
 from typing import Literal
 from unittest.mock import MagicMock, patch
 
@@ -11,11 +10,9 @@ from manuscript_reference_lister.repositories import JournalRepository
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> JournalRepository:
+def repo() -> JournalRepository:
     """Provides a fresh instance of JournalRepository for each test."""
-    repo = JournalRepository()
-    repo.local_repo_dir_path = str(tmp_path)
-    return repo
+    return JournalRepository()
 
 
 def test_get_journal_metadata_success(repo: JournalRepository) -> None:
@@ -97,12 +94,12 @@ def test_get_issn_year_endpoint_success(
         assert result == expected_year
         # Verify the API was called with the correct sort/order params
         mock_get.assert_called_with(
-            repo.issn_url.replace("{issn}", "1234-5678"),
+            repo.config.crossref_api_journals_issn_url.replace("{issn}", "1234-5678"),
             params={
                 "sort": "published",
                 "order": order,
                 "rows": 1,
-                "mailto": repo.email,
+                "mailto": repo.config.crossref_api_email,
             },
             headers=repo.headers,
         )
@@ -195,22 +192,9 @@ def test_merge_new_titles(repo: JournalRepository) -> None:
     assert new_entry["update"] == str(date.today())
 
 
-def test_save_all(repo: JournalRepository) -> None:
-    """Verify that the journal list is saved correctly to the work directory."""
-    initial_records = [{"input_title": "Test", "ISSN": "1234"}]
-    repo.records = initial_records
-    expected_path = Path(repo.local_repo_dir_path) / repo.local_filename
-
-    repo.save_all()
-
-    assert expected_path.exists()
-    saved_records = json.loads(expected_path.read_text())
-    assert saved_records == initial_records
-
-
 def test_update_all_priority_and_limit(repo: JournalRepository) -> None:
     """Verify that updates prioritize missing info and respect the max update limit."""
-    repo.update_limit = 1
+    repo.config = replace(repo.config, journal_update_limit=1)
     today = date.today()
     old_date = str(today - timedelta(days=45))
     recent_date = str(today - timedelta(days=5))
