@@ -1,8 +1,10 @@
 import json
-from collections.abc import Callable
+import logging
+from datetime import datetime
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TypeVar
 
+from manuscript_reference_lister.schemas import BaseSchema
 from manuscript_reference_lister.utils import (
     AppConfig,
     DataLoader,
@@ -11,15 +13,16 @@ from manuscript_reference_lister.utils import (
 )
 
 T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 
-class BaseRepository[T]:
+class BaseRepository[T: BaseSchema]:
     """Base class for repositories that handle JSON storage."""
 
     def __init__(
         self,
         local_filename: str,
-        validator: Callable[[Any], bool],
+        model_class: type[T],
         config: AppConfig | None = None,
     ):
         self.config = config or get_config()
@@ -28,7 +31,8 @@ class BaseRepository[T]:
             f"{self.config.crossref_api_email})"
         }
         self.local_filename = local_filename
-        self.validator = validator
+        self._load_failed = False
+        self.model_class = model_class
         self.records: list[T] = []
         self.requests_wrapper = RequestsWrapper(
             self.config.crossref_api_email,
@@ -40,28 +44,74 @@ class BaseRepository[T]:
     def __len__(self) -> int:
         return len(self.records)
 
-    def load_all(self, input_filepath: str | Path | None = None) -> None:
-        """Load local records and validate against the schema."""
+    def deduplicate(self) -> None:
+        """Removes duplicate records from the repository in-place."""
+        seen = set()
+        unique_records = []
+
+        for record in self.records:
+            key = record.identity_key
+            if key not in seen:
+                seen.add(key)
+                unique_records.append(record)
+
+        self.records = unique_records
+
+    def load_all(
+        self, input_filepath: str | Path | None = None, raise_exception=False
+    ) -> None:
+        """Load local records and validate against the schema. The list of records of
+        the object are set to [] if invalid."""
         path = Path(
             input_filepath
             or Path(self.config.local_repo_dir_path) / self.local_filename
         )
-        data = DataLoader(path, raise_exception=False).load_json(self.validator)
-        self.records = data if data is not None else []
+        data = DataLoader(path, raise_exception=raise_exception).load_json()
+        if data and isinstance(data, list):
+            try:
+                self.records = [self.model_class(**item) for item in data]
+                self._load_failed = False
+            except (TypeError, ValueError) as e:
+                logger.warning(
+                    f"Failed validation for {self.model_class.__name__} in file {path}."
+                    f"Records set to [] for this run. Please check the file before a"
+                    f" rerun."
+                )
+                if raise_exception:
+                    raise e
+                logger.debug(f"Error detail: {e}")
+                self.records = []
+                self._load_failed = True
+        else:
+            self.records = []
 
     def save_all(self, output_filepath: str | Path | None = None) -> None:
-        """Saves records atomically using temporary files."""
-        output_filepath = Path(
-            output_filepath
-            or Path(self.config.local_repo_dir_path) / self.local_filename
-        )
+        """Saves records atomically using a temporary file.
+        Saving is done in a recovery file if previous load_all failed."""
+        protected_path = self.config.local_repo_dir_path / self.local_filename
+        target_path = Path(output_filepath) if output_filepath else protected_path
 
-        json_data = json.dumps(self.records, indent=4, ensure_ascii=False)
-        temp_path = output_filepath.with_suffix(".tmp")
+        if self._load_failed and target_path == protected_path:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            new_filename = (
+                f"{target_path.stem}_recovered_{timestamp}{target_path.suffix}"
+            )
+            target_path = target_path.with_name(new_filename)
+
+            # Update state so the repo "migrates" to the new file
+            self.local_filename = new_filename
+            self._load_failed = False
+            logger.warning(
+                f"Previous load failed; diverting to recovery file: {target_path}"
+            )
+
+        data_to_save = [record.to_dict() for record in self.records]
+        json_data = json.dumps(data_to_save, indent=4, ensure_ascii=False)
+        temp_path = target_path.with_suffix(".tmp")
 
         try:
             temp_path.write_text(json_data, encoding="utf-8")
-            temp_path.replace(output_filepath)
+            temp_path.replace(target_path)
         finally:
             if temp_path.exists():
                 temp_path.unlink()

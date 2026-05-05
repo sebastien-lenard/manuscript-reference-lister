@@ -1,24 +1,19 @@
-from typing import Literal, TypedDict
+from dataclasses import dataclass
+from typing import Literal, override
+
+from .base_schema import BaseSchema
 
 
-class CitationMetadata(TypedDict):
+@dataclass
+class CitationMetadata(BaseSchema):
+    """Represents validated metadata for a citation in a manuscript."""
+
     first_authors_txt: str  # e.g. Lenard et al., Guns and Vanacker
     year_and_suffix: str  # e.g. 2020a
-    type: Literal["narrative", "parenthetical"]
+    type: Literal["narrative", "parenthetical"] = "narrative"
 
-
-def is_citation_metadata(record: dict) -> bool:
-    """Check if a dictionary contains ALL keys defined in CitationMetadata."""
-    required_keys = set(CitationMetadata.__annotations__.keys())
-    return isinstance(record, dict) and required_keys.issubset(record.keys())
-
-
-def create_citation_metadata(**kwargs) -> CitationMetadata:
-    """Creates a default CitationMetadata with values overridable by kwargs."""
-    defaults: CitationMetadata = {
-        "first_authors_txt": "Unknown",
-        "year_and_suffix": "2010",
-        "type": "narrative",
-    }
-    defaults.update(kwargs)
-    return defaults
+    @override
+    @property
+    def identity_key(self) -> tuple[str, str]:
+        """Returns the unique identifier used for deduplication."""
+        return (self.first_authors_txt, self.year_and_suffix)

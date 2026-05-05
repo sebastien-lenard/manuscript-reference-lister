@@ -1,13 +1,10 @@
 import logging
 import time
+from dataclasses import astuple
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from manuscript_reference_lister.schemas import (
-    JournalMetadata,
-    create_journal_metadata,
-    is_journal_metadata,
-)
+from manuscript_reference_lister.schemas import JournalMetadata
 from manuscript_reference_lister.utils import AppConfig
 
 from .base_repository import BaseRepository
@@ -21,7 +18,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         local_filename: str = "journal_records.json",
         config: AppConfig | None = None,
     ):
-        super().__init__(local_filename, validator=is_journal_metadata, config=config)
+        super().__init__(local_filename, model_class=JournalMetadata, config=config)
         self.has_pending_updates = False
 
     def get_journal_metadata(self, input_title: str) -> list[JournalMetadata]:
@@ -54,7 +51,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
 
         if not exact_matches:
             logging.warning("Journal %s not found.", input_title)
-            return [create_journal_metadata(input_title=input_title)]
+            return [JournalMetadata(input_title=input_title)]
 
         # Discard exact matches other than the 1st one
         if len(exact_matches) > 1:
@@ -80,7 +77,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
                 continue
 
             journal_records.append(
-                create_journal_metadata(
+                JournalMetadata(
                     input_title=input_title,
                     true_title=true_title,
                     publisher=publisher,
@@ -127,9 +124,9 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         regular local saving of the updates."""
 
         expiration_date = date.today() - timedelta(days=self.config.journal_update_days)
-        missing_metadata = []
-        expired_metadata = []
-        valid_metadata = []
+        missing_metadata: list[JournalMetadata] = []
+        expired_metadata: list[JournalMetadata] = []
+        valid_metadata: list[JournalMetadata] = []
 
         for record in self.records:
             try:
@@ -137,7 +134,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
             except (ValueError, TypeError):
                 last_update = date.min
 
-            if None in record.values():
+            if None in astuple(record):
                 missing_metadata.append(record)
             elif last_update < expiration_date:
                 expired_metadata.append(record)
@@ -152,7 +149,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
 
         for i, record in enumerate(records_to_update):
             if update_count < self.config.journal_update_limit:
-                new_data = self.get_journal_metadata(record["input_title"])
+                new_data = self.get_journal_metadata(record.input_title)
                 if new_data:
                     valid_metadata.extend(new_data)
                 else:
@@ -183,10 +180,10 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         """Merge new titles into the existing records as empty templates.
         No duplication of titles."""
         # Set for fast lookup
-        existing_titles = {info["input_title"] for info in self.records}
+        existing_titles = {info.input_title for info in self.records}
 
         new_entries = [
-            create_journal_metadata(input_title=title)
+            JournalMetadata(input_title=title)
             for title in input_titles
             if title not in existing_titles
         ]

@@ -4,6 +4,7 @@ import traceback
 import requests
 
 from manuscript_reference_lister.repositories import WorkRepository
+from manuscript_reference_lister.schemas import CitationMetadata
 
 
 def check_integ_works_api_health():
@@ -23,10 +24,10 @@ def check_integ_works_api_health():
         print("Testing connectivity and author filtering...")
 
         candidates = repo.get_work_metadata(
-            input_citation_metadata={
-                "first_authors_txt": test_author,
-                "year_and_suffix": test_year,
-            },
+            input_citation_metadata=CitationMetadata(
+                first_authors_txt=test_author,
+                year_and_suffix=test_year,
+            ),
             input_ISSN=test_issn,
             keywords=test_keywords,
             get_limit=requested_limit,
@@ -70,10 +71,10 @@ def check_integ_works_api_health():
         test_issn_2 = "2213-3054"
 
         candidates_2 = repo.get_work_metadata(
-            input_citation_metadata={
-                "first_authors_txt": test_author_2,
-                "year_and_suffix": test_year_2,
-            },
+            input_citation_metadata=CitationMetadata(
+                first_authors_txt=test_author_2,
+                year_and_suffix=test_year_2,
+            ),
             input_ISSN=test_issn_2,
             keywords=test_keywords,
             get_limit=1,
@@ -92,16 +93,14 @@ def check_integ_works_api_health():
         first_candidate = candidates[0]
 
         # Check DOI
-        if first_candidate["doi"].startswith("https://doi.org/"):
-            print(f"[OK] DOI Formatting: {first_candidate['doi']}")
+        if first_candidate.DOI.startswith("https://doi.org/"):
+            print(f"[OK] DOI Formatting: {first_candidate.DOI}")
         else:
-            print(
-                f"[FAIL] DOI Formatting: Unexpected prefix in {first_candidate['doi']}"
-            )
+            print(f"[FAIL] DOI Formatting: Unexpected prefix in {first_candidate.DOI}")
             sys.exit(1)
 
         # Check metadata
-        if first_candidate["input_first_authors_txt"] == test_author:
+        if first_candidate.input_first_authors_txt == test_author:
             print(
                 f"[OK] Metadata persistence: Original author '{test_author}' preserved "
                 f"in candidate."

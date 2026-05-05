@@ -4,8 +4,6 @@ from manuscript_reference_lister.schemas import (
     CitationMetadata,
     CrossrefAuthor,
     WorkMetadata,
-    create_work_metadata,
-    is_work_metadata,
 )
 from manuscript_reference_lister.utils import AppConfig
 
@@ -18,7 +16,7 @@ class WorkRepository(BaseRepository[WorkMetadata]):
     def __init__(
         self, local_filename: str = "work_records.json", config: AppConfig | None = None
     ):
-        super().__init__(local_filename, validator=is_work_metadata, config=config)
+        super().__init__(local_filename, model_class=WorkMetadata, config=config)
 
     def get_work_metadata(
         self,
@@ -41,8 +39,8 @@ class WorkRepository(BaseRepository[WorkMetadata]):
             raise ValueError(
                 "input_ISSN is an obligatory argument (valid issn of a journal)"
             )
-        input_first_authors_txt = input_citation_metadata["first_authors_txt"]
-        input_year_and_suffix = input_citation_metadata["year_and_suffix"]
+        input_first_authors_txt = input_citation_metadata.first_authors_txt
+        input_year_and_suffix = input_citation_metadata.year_and_suffix
         year_int = int("".join(filter(str.isdigit, input_year_and_suffix)))
         if year_int < 1600 or year_int > 2099:
             raise ValueError(f"year {year_int} must be in the 1600-2099 range")
@@ -86,13 +84,13 @@ class WorkRepository(BaseRepository[WorkMetadata]):
             doi = item.get("DOI")
             if doi:
                 candidates.append(
-                    create_work_metadata(
+                    WorkMetadata(
                         input_first_authors_txt=input_first_authors_txt,
                         input_year_and_suffix=input_year_and_suffix,
                         input_ISSN=input_ISSN,
                         reference="",
                         style="",
-                        doi=self.config.doi_api_url.replace("{doi}", str(doi)),
+                        DOI=self.config.doi_api_url.replace("{doi}", str(doi)),
                         type=item.get("type", "unknown"),
                     )
                 )

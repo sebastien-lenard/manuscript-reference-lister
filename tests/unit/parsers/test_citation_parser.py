@@ -13,7 +13,7 @@ def test_basic_and_coauthor_formats(parser: CitationParser) -> None:
     """Test standard Author, Author and Author, and Author et al."""
     text = "Hovius (1997), Parker and Smith (2011), and Larsen et al. (2012)."
     res = parser.extract_all(text)
-    authors = [r["first_authors_txt"] for r in res]
+    authors = [r.first_authors_txt for r in res]
 
     assert "Hovius" in authors
     assert "Parker and Smith" in authors
@@ -26,8 +26,8 @@ def test_multiple_years_narrative(parser: CitationParser) -> None:
     res = parser.extract_all(text)
 
     assert len(res) == 2
-    assert res[0]["year_and_suffix"] == "2017a"
-    assert res[1]["year_and_suffix"] == "2019b"
+    assert res[0].year_and_suffix == "2017a"
+    assert res[1].year_and_suffix == "2019b"
 
 
 @pytest.mark.parametrize(
@@ -50,7 +50,7 @@ def test_complex_names_and_particles(
 ) -> None:
     """Verify handling of initials, particles, and accented/hyphenated names."""
     res = parser.extract_all(text)
-    authors = [r["first_authors_txt"] for r in res]
+    authors = [r.first_authors_txt for r in res]
     assert expected_author in authors
 
 
@@ -58,7 +58,7 @@ def test_nested_and_parenthetical_blocks(parser: CitationParser) -> None:
     """Test semicolon-separated groups and text inside double parentheses."""
     text = "((Larsen and Montgomery, 2012)). See also (Smith, 2003; Brown, 2005)."
     res = parser.extract_all(text)
-    authors = [r["first_authors_txt"] for r in res]
+    authors = [r.first_authors_txt for r in res]
 
     assert len(res) == 3
     assert "Larsen and Montgomery" in authors
@@ -70,7 +70,7 @@ def test_blacklist_and_noise(parser: CitationParser) -> None:
     """Ensure common labels (Fig. or Table) are ignored while similar names are kept."""
     text = "(Fig. 5; Hovius, 1997). Figueroa (2020) is not Fig."
     res = parser.extract_all(text)
-    authors = [r["first_authors_txt"] for r in res]
+    authors = [r.first_authors_txt for r in res]
 
     assert "Hovius" in authors
     assert "Figueroa" in authors
@@ -84,8 +84,8 @@ def test_unicode_and_french_coordinators(parser: CitationParser) -> None:
     res = parser.extract_all(text)
 
     assert len(res) == 2
-    assert res[0]["first_authors_txt"] == "Lyon‐Caen and Molnar"
-    assert res[1]["first_authors_txt"] == "Lyon‐Caen et Molnar"
+    assert res[0].first_authors_txt == "Lyon‐Caen and Molnar"
+    assert res[1].first_authors_txt == "Lyon‐Caen et Molnar"
 
 
 @pytest.mark.parametrize(

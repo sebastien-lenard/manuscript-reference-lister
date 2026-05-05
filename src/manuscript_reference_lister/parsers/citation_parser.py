@@ -12,7 +12,7 @@ class CitationParser:
     ):
         # Extended blacklist to avoid confusion with figures/tables
         config = config or get_config()
-        self.blacklist = (config or get_config()).parser_blacklist
+        self.blacklist = blacklist or config.parser_blacklist
 
         # Universal dash handling (standard, unicode 2010-2015)
         dash_range = r"-\u2010-\u2015"
@@ -53,7 +53,7 @@ class CitationParser:
     def extract_all(self, text: str) -> list[CitationMetadata]:
         """
         Extract narrative (e.g. Hamling (2020)) and parenthetical (e.g. (Lenard et al.,
-        2020)) citations.
+        2020)) citations (can be duplicates).
         Handles complex cases:
         - multiple years (Hovius et al., 1997, 2011)
         - multiple citations (Jeandet et al., 2019; Lenard et al., 2020)
@@ -81,11 +81,11 @@ class CitationParser:
             years = re.findall(self.year_pattern, match.group(2))
             for y in years:
                 results.append(
-                    {
-                        "first_authors_txt": author_name,
-                        "year_and_suffix": y.strip(),
-                        "type": "narrative",
-                    }
+                    CitationMetadata(
+                        first_authors_txt=author_name,
+                        year_and_suffix=y.strip(),
+                        type="narrative",
+                    )
                 )
 
         # 2. PARENTHETICAL CITATIONS: (Hovius et al., 1997; Parker and Smith, 2011)
@@ -110,22 +110,11 @@ class CitationParser:
                     years = re.findall(f"({self.year_pattern})", clean_group)
                     for y in years:
                         results.append(
-                            {
-                                "first_authors_txt": author_name,
-                                "year_and_suffix": y,
-                                "type": "parenthetical",
-                            }
+                            CitationMetadata(
+                                first_authors_txt=author_name,
+                                year_and_suffix=y,
+                                type="parenthetical",
+                            )
                         )
 
-        return self._deduplicate(results)
-
-    def _deduplicate(self, citations: list[CitationMetadata]) -> list[CitationMetadata]:
-        """Remove duplicates (independently from type)."""
-        seen = set()
-        unique_citations = []
-        for c in citations:
-            identifier = (c["first_authors_txt"], c["year_and_suffix"])
-            if identifier not in seen:
-                seen.add(identifier)
-                unique_citations.append(c)
-        return unique_citations
+        return results

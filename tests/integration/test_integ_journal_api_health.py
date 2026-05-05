@@ -63,9 +63,9 @@ def check_integ_journals_api_health() -> None:
         print("Testing date extraction logic...")
         results = repo.get_journal_metadata(input_title)
 
-        if results and isinstance(results[0].get("start_year"), int):
+        if results and isinstance(results[0].start_year, int):
             print(
-                f"[OK] Date Logic OK: Extracted year {results[0]['start_year']} as "
+                f"[OK] Date Logic OK: Extracted year {results[0].start_year} as "
                 "integer."
             )
         else:

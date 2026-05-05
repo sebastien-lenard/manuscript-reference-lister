@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from manuscript_reference_lister.repositories import JournalRepository
-from manuscript_reference_lister.schemas import create_journal_metadata
+from manuscript_reference_lister.schemas import JournalMetadata
 
 
 @pytest.fixture
@@ -43,9 +43,9 @@ def test_get_journal_metadata_success(repo: JournalRepository) -> None:
         results = repo.get_journal_metadata("Geology")
 
         assert len(results) == 1
-        assert results[0]["ISSN"] == "0091-7613"
-        assert results[0]["start_year"] == 1973
-        assert results[0]["end_year"] == 1995
+        assert results[0].ISSN == "0091-7613"
+        assert results[0].start_year == 1973
+        assert results[0].end_year == 1995
 
 
 def test_get_journal_metadata_not_found_behavior(
@@ -61,8 +61,8 @@ def test_get_journal_metadata_not_found_behavior(
 
             assert "Journal Unknown Journal not found." in caplog.text
             assert len(results) == 1
-            assert results[0]["ISSN"] is None
-            assert results[0]["input_title"] == "Unknown Journal"
+            assert results[0].ISSN is None
+            assert results[0].input_title == "Unknown Journal"
 
 
 @pytest.mark.parametrize(
@@ -172,25 +172,24 @@ def test_get_journal_metadata_multiple_issns(repo: JournalRepository) -> None:
         results = repo.get_journal_metadata("Nature")
 
         assert len(results) == 2
-        assert results[0]["ISSN"] == "0028-0836"
-        assert results[1]["ISSN"] == "1476-4687"
+        assert results[0].ISSN == "0028-0836"
+        assert results[1].ISSN == "1476-4687"
         assert mock_get.call_count == 5
 
 
 def test_merge_new_titles(repo: JournalRepository) -> None:
     """Verify that new titles are merged as templates without affecting existing data."""
-    repo.records = [create_journal_metadata(input_title="Existing", ISSN="0000-0000")]
+    repo.records = [JournalMetadata(input_title="Existing", ISSN="0000-0000")]
     repo.merge_new_titles(input_titles=["Existing", "New"])
 
     assert len(repo) == 2
     assert any(
-        r["input_title"] == "Existing" and r["ISSN"] == "0000-0000"
-        for r in repo.records
+        r.input_title == "Existing" and r.ISSN == "0000-0000" for r in repo.records
     )
 
-    new_entry = next(r for r in repo.records if r["input_title"] == "New")
-    assert new_entry["ISSN"] is None
-    assert new_entry["update"] == str(date.today())
+    new_entry = next(r for r in repo.records if r.input_title == "New")
+    assert new_entry.ISSN is None
+    assert new_entry.update == str(date.today())
 
 
 def test_update_all_priority_and_limit(repo: JournalRepository) -> None:
@@ -201,19 +200,15 @@ def test_update_all_priority_and_limit(repo: JournalRepository) -> None:
     recent_date = str(today - timedelta(days=5))
 
     repo.records = [
-        create_journal_metadata(input_title="Old", update=old_date, ISSN="1234-5678"),
-        create_journal_metadata(
+        JournalMetadata(input_title="Old", update=old_date, ISSN="1234-5678"),
+        JournalMetadata(
             input_title="Missing", update=recent_date, ISSN=None
         ),  # Priority 1
-        create_journal_metadata(
-            input_title="Recent", update=recent_date, ISSN="9012-3456"
-        ),
+        JournalMetadata(input_title="Recent", update=recent_date, ISSN="9012-3456"),
     ]
 
     updated_data = [
-        create_journal_metadata(
-            input_title="Missing", ISSN="1111-2222", update=str(today)
-        )
+        JournalMetadata(input_title="Missing", ISSN="1111-2222", update=str(today))
     ]
 
     with patch.object(
@@ -224,4 +219,4 @@ def test_update_all_priority_and_limit(repo: JournalRepository) -> None:
         assert mock_get.call_count == 1
         assert repo.has_pending_updates is True
         # Ensure 'Missing' was the one updated
-        assert any(j["ISSN"] == "1111-2222" for j in repo.records)
+        assert any(j.ISSN == "1111-2222" for j in repo.records)

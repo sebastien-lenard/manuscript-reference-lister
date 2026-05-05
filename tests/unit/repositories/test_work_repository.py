@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from manuscript_reference_lister.repositories import WorkRepository
-from manuscript_reference_lister.schemas import CrossrefAuthor, create_citation_metadata
+from manuscript_reference_lister.schemas import CitationMetadata, CrossrefAuthor
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def test_fetch_not_found(repo: WorkRepository) -> None:
 
     with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
         result = repo.get_work_metadata(
-            create_citation_metadata(
+            CitationMetadata(
                 first_authors_txt="UnknownAuthor",
                 year_and_suffix="2025",
             ),
@@ -50,15 +50,13 @@ def test_returns_multiple_candidates(repo: WorkRepository) -> None:
 
     with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
         results = repo.get_work_metadata(
-            create_citation_metadata(
-                first_authors_txt="Lenard et al.", year_and_suffix="2020"
-            ),
+            CitationMetadata(first_authors_txt="Lenard et al.", year_and_suffix="2020"),
             input_ISSN="1752-0894",
         )
         assert len(results) == 2
-        assert results[0]["type"] == "journal-article"
-        assert results[0]["doi"] == "https://doi.org/10.1038/s41561-020-0585-2"
-        assert results[1]["type"] == "proceedings-article"
+        assert results[0].type == "journal-article"
+        assert results[0].DOI == "https://doi.org/10.1038/s41561-020-0585-2"
+        assert results[1].type == "proceedings-article"
 
 
 def test_parameterized_keywords(repo: WorkRepository) -> None:
@@ -70,7 +68,7 @@ def test_parameterized_keywords(repo: WorkRepository) -> None:
 
     with patch.object(repo.requests_wrapper, "get", return_value=mock_resp) as mock_get:
         repo.get_work_metadata(
-            create_citation_metadata(
+            CitationMetadata(
                 first_authors_txt="Guns and Vanacker",
                 year_and_suffix="2014",
             ),
@@ -106,15 +104,15 @@ def test_author_validation_filtering(repo: WorkRepository) -> None:
 
     with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
         results = repo.get_work_metadata(
-            create_citation_metadata(
+            CitationMetadata(
                 first_authors_txt="Guns et al.",
                 year_and_suffix="2014",
             ),
             input_ISSN="2213-3054",
         )
         assert len(results) == 2
-        assert results[0]["doi"] == "https://doi.org/10.1/match"
-        assert results[1]["doi"] == "https://doi.org/10.1/inverted"
+        assert results[0].DOI == "https://doi.org/10.1/match"
+        assert results[1].DOI == "https://doi.org/10.1/inverted"
 
 
 @pytest.mark.parametrize(
