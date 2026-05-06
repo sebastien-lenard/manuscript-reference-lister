@@ -178,37 +178,75 @@ def test_get_journal_metadata_multiple_issns(repo: JournalRepository) -> None:
 
 
 def test_merge_new_titles(repo: JournalRepository) -> None:
-    """Verify that new titles are merged as templates without affecting existing data."""
+    """Verify that new titles are deduplicated and merged as templates without
+    affecting existing data."""
     repo.records = [JournalMetadata(input_title="Existing", ISSN="0000-0000")]
-    repo.merge_new_titles(input_titles=["Existing", "New"])
+    repo.merge_new_titles(input_titles=["Existing", "Geology", "Geology"])
 
     assert len(repo) == 2
     assert any(
         r.input_title == "Existing" and r.ISSN == "0000-0000" for r in repo.records
     )
 
-    new_entry = next(r for r in repo.records if r.input_title == "New")
-    assert new_entry.ISSN is None
-    assert new_entry.update == str(date.today())
+    new_entries = [r for r in repo.records if r.input_title == "Geology"]
+    assert len(new_entries) == 1
+    assert new_entries[0].ISSN is None
+    assert new_entries[0].update == str(date.today())
 
 
-def test_update_all_priority_and_limit(repo: JournalRepository) -> None:
+def test_update_all_priority_and_limit(
+    repo: JournalRepository, caplog: pytest.LogCaptureFixture
+) -> None:
     """Verify that updates prioritize missing info and respect the max update limit."""
-    repo.config = replace(repo.config, journal_update_limit=1)
+    caplog.set_level(logging.INFO)
+    repo.config = replace(repo.config, journal_update_limit=1, journal_update_days=30)
     today = date.today()
     old_date = str(today - timedelta(days=45))
     recent_date = str(today - timedelta(days=5))
 
     repo.records = [
-        JournalMetadata(input_title="Old", update=old_date, ISSN="1234-5678"),
+        # This one is EXPIRED (all fields filled, date is old)
         JournalMetadata(
-            input_title="Missing", update=recent_date, ISSN=None
-        ),  # Priority 1
-        JournalMetadata(input_title="Recent", update=recent_date, ISSN="9012-3456"),
+            input_title="Old",
+            true_title="Old Journal",
+            publisher="Pub",
+            ISSN="1234-5678",
+            start_year=2000,
+            end_year=2024,
+            update=old_date,
+        ),
+        # This one is MISSING (ISSN is None)
+        JournalMetadata(
+            input_title="Missing",
+            true_title="Missing Journal",
+            publisher="Pub",
+            ISSN=None,
+            start_year=2000,
+            end_year=2024,
+            update=recent_date,
+        ),
+        # This one is VALID (all fields filled, date is recent)
+        JournalMetadata(
+            input_title="Recent",
+            true_title="Recent Journal",
+            publisher="Pub",
+            ISSN="9012-3456",
+            start_year=2020,
+            end_year=2024,
+            update=recent_date,
+        ),
     ]
 
     updated_data = [
-        JournalMetadata(input_title="Missing", ISSN="1111-2222", update=str(today))
+        JournalMetadata(
+            input_title="Missing",
+            true_title="Missing Journal",
+            publisher="Pub",
+            ISSN="1111-2222",
+            start_year=2000,
+            end_year=2024,
+            update=str(today),
+        )
     ]
 
     with patch.object(
@@ -216,7 +254,15 @@ def test_update_all_priority_and_limit(repo: JournalRepository) -> None:
     ) as mock_get:
         repo.update_all()
 
+        assert "Journals with missing metadata: 1" in caplog.text
+        assert "Journals with expired metadata: 1" in caplog.text
+
+        # Ensure 'Missing' was the one updated due to limit=1
         assert mock_get.call_count == 1
+        mock_get.assert_called_with("Missing")
         assert repo.has_pending_updates is True
-        # Ensure 'Missing' was the one updated
         assert any(j.ISSN == "1111-2222" for j in repo.records)
+        # Verify 'Recent' was moved to valid_metadata untouched
+        assert any(
+            j.input_title == "Recent" and j.ISSN == "9012-3456" for j in repo.records
+        )

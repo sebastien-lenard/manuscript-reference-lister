@@ -29,6 +29,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         Warning: If more than 1 exact match is found, returns only the records for the
         first one found.
         """
+        logging.info(f"Retrieving {input_title} metadata...")
         # Retrieval of records with titles similar to input_title from Crossref API
         params = {
             "query": input_title,
@@ -56,7 +57,8 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         # Discard exact matches other than the 1st one
         if len(exact_matches) > 1:
             logging.warning(
-                "Discarded duplicate titles in the repo for journal %s.", input_title
+                f"Discarded {len(exact_matches)} duplicate titles in the repo for "
+                f"journal {input_title}."
             )
         item = exact_matches[0]
         true_title = item.get("title", "")
@@ -65,6 +67,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         issns = list(dict.fromkeys(item.get("ISSN", [])))  # remove duplicate ISSNs
 
         for issn in issns:
+            logging.info(f"Retrieving {input_title} / {issn} publication range...")
             # Publication range
             dates = {
                 "min_year": self.get_issn_year_endpoint(issn, "asc"),
@@ -104,6 +107,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
             params=params,
             headers=self.headers,
         )
+
         response.raise_for_status()
         items = response.json().get("message", {}).get("items", [])
         if not items:
@@ -124,15 +128,15 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         regular local saving of the updates."""
 
         expiration_date = date.today() - timedelta(days=self.config.journal_update_days)
+        logging.info(
+            f"Updating journals without metadata or metadata older than {str(expiration_date)}..."
+        )
         missing_metadata: list[JournalMetadata] = []
         expired_metadata: list[JournalMetadata] = []
         valid_metadata: list[JournalMetadata] = []
 
         for record in self.records:
-            try:
-                last_update = datetime.strptime(record["update"], "%Y-%m-%d").date()
-            except (ValueError, TypeError):
-                last_update = date.min
+            last_update = datetime.strptime(record.update, "%Y-%m-%d").date()
 
             if None in astuple(record):
                 missing_metadata.append(record)
@@ -140,8 +144,10 @@ class JournalRepository(BaseRepository[JournalMetadata]):
                 expired_metadata.append(record)
             else:
                 valid_metadata.append(record)
-
+        logging.info(f"Journals with missing metadata: {len(missing_metadata)}")
+        logging.info(f"Journals with expired metadata: {len(expired_metadata)}")
         records_to_update = missing_metadata + expired_metadata
+
         update_count = 0
         last_display_time = time.time()
         update_total = len(records_to_update)
@@ -163,7 +169,9 @@ class JournalRepository(BaseRepository[JournalMetadata]):
             # Display update every 10 seconds
             if time.time() - last_display_time > 10:
                 remaining = update_total - (i + 1)
-                print(f"Status: {remaining} updates remaining out of {update_total}...")
+                logging.info(
+                    f"Status: {remaining} updates remaining out of {update_total}..."
+                )
                 last_display_time = time.time()
 
         # 3. Handle Warning and Flag
@@ -175,10 +183,12 @@ class JournalRepository(BaseRepository[JournalMetadata]):
             )
 
         self.records = valid_metadata
+        logging.info(f"Updated {len(valid_metadata)} journals.")
 
     def merge_new_titles(self, input_titles: list[str]) -> None:
         """Merge new titles into the existing records as empty templates.
         No duplication of titles."""
+        input_titles = list(dict.fromkeys(input_titles))  # unique titles
         # Set for fast lookup
         existing_titles = {info.input_title for info in self.records}
 
@@ -189,3 +199,4 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         ]
 
         self.records.extend(new_entries)
+        logging.info(f"Merged {len(new_entries)} new journal records.")

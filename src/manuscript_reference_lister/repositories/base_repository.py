@@ -74,7 +74,7 @@ class BaseRepository[T: BaseSchema]:
             except (TypeError, ValueError) as e:
                 logger.warning(
                     f"Failed validation for {self.model_class.__name__} in file {path}."
-                    f"Records set to [] for this run. Please check the file before a"
+                    f" Records set to [] for this run. Please check the file before a"
                     f" rerun."
                 )
                 if raise_exception:
@@ -84,6 +84,7 @@ class BaseRepository[T: BaseSchema]:
                 self._load_failed = True
         else:
             self.records = []
+        logging.info(f"Loaded {len(self.records)} records from {str(path)}")
 
     def save_all(self, output_filepath: str | Path | None = None) -> None:
         """Saves records atomically using a temporary file.
@@ -115,3 +116,4 @@ class BaseRepository[T: BaseSchema]:
         finally:
             if temp_path.exists():
                 temp_path.unlink()
+        logging.info(f"Saved {len(self.records)} records from {str(target_path)}")
