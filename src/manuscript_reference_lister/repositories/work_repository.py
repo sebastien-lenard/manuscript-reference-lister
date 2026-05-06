@@ -1,3 +1,5 @@
+import logging
+
 from unidecode import unidecode
 
 from manuscript_reference_lister.schemas import (
@@ -88,10 +90,8 @@ class WorkRepository(BaseRepository[WorkMetadata]):
                         input_first_authors_txt=input_first_authors_txt,
                         input_year_and_suffix=input_year_and_suffix,
                         input_ISSN=input_ISSN,
-                        reference="",
-                        style="",
                         DOI=self.config.doi_api_url.replace("{doi}", str(doi)),
-                        type=item.get("type", "unknown"),
+                        type=item.get("type"),
                     )
                 )
         return candidates
@@ -157,3 +157,78 @@ class WorkRepository(BaseRepository[WorkMetadata]):
                 return False
 
         return True
+
+    def merge_new_works(self, citations: list[CitationMetadata]) -> None:
+        """Merge new citations into the existing records as empty templates
+        (placeholders without doi and input_issn).
+        Avoids adding a template if a record with the same author/year already exists,
+        using a custom identity key.
+        """
+        # Deduplicate citations if necessary
+        unique_citations = {
+            (c.first_authors_txt, c.year_and_suffix): c for c in citations
+        }.values()
+
+        # Map existing records by (author, year)
+        existing_keys = {
+            (r.input_first_authors_txt, r.input_year_and_suffix) for r in self.records
+        }
+
+        new_entries = [
+            WorkMetadata(
+                input_first_authors_txt=cite.first_authors_txt,
+                input_year_and_suffix=cite.year_and_suffix,
+            )
+            for cite in unique_citations
+            if (cite.first_authors_txt, cite.year_and_suffix) not in existing_keys
+        ]
+
+        self.records.extend(new_entries)
+        logging.info(f"Merged {len(new_entries)} new work record placeholders.")
+
+    def update_all(self, ISSNs: list[str]) -> None:
+        """
+        Attempt to find DOIs for all records currently missing them.
+        Iterates through provided ISSNs to filter Crossref API results.
+        """
+        # 1. Identify templates needing info
+        templates_to_process = [r for r in self.records if not r.DOI]
+
+        new_rich_records = []
+        processed_templates = []
+
+        for record in templates_to_process:
+            # Construct the search object expected by get_work_metadata
+            citation_info = CitationMetadata(
+                first_authors_txt=record.input_first_authors_txt,
+                year_and_suffix=record.input_year_and_suffix,
+            )
+
+            found_for_this_record = False
+            for issn in ISSNs:
+                # Call your existing API wrapper
+                results = self.get_work_metadata(
+                    input_citation_metadata=citation_info, input_ISSN=issn
+                )
+
+                if results:
+                    new_rich_records.extend(results)
+                    found_for_this_record = True
+
+            if found_for_this_record:
+                processed_templates.append(record)
+            else:
+                logging.warning(
+                    f"No work found for {citation_info.first_authors_txt},"
+                    f" {citation_info.year_and_suffix}."
+                )
+
+        # 2. Swap templates for rich records
+        for template in processed_templates:
+            self.records.remove(template)
+
+        self.records.extend(new_rich_records)
+
+        self.deduplicate()
+
+        logging.info(f"Updated {len(new_rich_records)} work records with DOI.")

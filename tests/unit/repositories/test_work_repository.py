@@ -3,7 +3,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from manuscript_reference_lister.repositories import WorkRepository
-from manuscript_reference_lister.schemas import CitationMetadata, CrossrefAuthor
+from manuscript_reference_lister.schemas import (
+    CitationMetadata,
+    CrossrefAuthor,
+    WorkMetadata,
+)
 
 
 @pytest.fixture
@@ -195,3 +199,118 @@ def test_validate_first_authors_logic(
         )
         == expected_result
     )
+
+
+def test_merge_new_works_deduplication(repo: WorkRepository):
+    """Ensure duplicate input citations only create one record."""
+    citations = [
+        CitationMetadata(first_authors_txt="Lenard et al.", year_and_suffix="2020a"),
+        CitationMetadata(first_authors_txt="Lenard et al.", year_and_suffix="2020a"),
+    ]
+    repo.merge_new_works(citations)
+
+    assert len(repo) == 1
+    assert repo.records[0].input_first_authors_txt == "Lenard et al."
+
+
+def test_merge_new_works_avoids_duplicate_of_rich_record(repo: WorkRepository):
+    """
+    Ensure a template is NOT added if a record with the same author/year
+    already exists (even if the existing record has a DOI/ISSN).
+    """
+    # Pre-populate with a 'rich' record
+    rich_record = WorkMetadata(
+        input_first_authors_txt="Lenard et al.",
+        input_year_and_suffix="2020a",
+        input_ISSN="1752-0894",
+        DOI="10.1038/s41561-020-0585-2",
+    )
+    repo.records = [rich_record]
+
+    # Try to merge a citation that matches the author/year
+    citations = [
+        CitationMetadata(first_authors_txt="Lenard et al.", year_and_suffix="2020a")
+    ]
+    repo.merge_new_works(citations)
+
+    # Should still be 1 record, and it should be our rich one
+    assert len(repo) == 1
+    assert repo.records[0].DOI == "10.1038/s41561-020-0585-2"
+    assert repo.records[0].input_ISSN == "1752-0894"
+
+
+def test_merge_new_works_adds_fresh_template(repo: WorkRepository):
+    """Ensure a brand new citation is added as a template."""
+    repo.records = []
+    citations = [
+        CitationMetadata(first_authors_txt="New Author", year_and_suffix="2024")
+    ]
+
+    repo.merge_new_works(citations)
+
+    assert len(repo) == 1
+    new_entry = repo.records[0]
+    assert new_entry.input_first_authors_txt == "New Author"
+    assert new_entry.DOI is None
+    assert new_entry.input_ISSN is None
+
+
+def test_update_all_replaces_template_with_rich_record(repo: WorkRepository):
+    """Verify that a record without a DOI is updated when get_work_metadata returns a
+    result."""
+    template = WorkMetadata(
+        input_first_authors_txt="Lenard et al.", input_year_and_suffix="2020a"
+    )
+    existing_rich = WorkMetadata(
+        input_first_authors_txt="Other Author",
+        input_year_and_suffix="2021",
+        DOI="https://doi.org",
+    )
+    repo.records = [template, existing_rich]
+
+    mock_rich_result = WorkMetadata(
+        input_first_authors_txt="Lenard et al.",
+        input_year_and_suffix="2020a",
+        input_ISSN="1752-0894",
+        DOI="https://doi.org",
+        type="journal-article",
+    )
+
+    with patch.object(
+        repo, "get_work_metadata", return_value=[mock_rich_result]
+    ) as mock_get:
+        repo.update_all(ISSNs=["1752-0894"])
+
+        # Check that get_work_metadata called for the template but NOT for the existing
+        # rich record
+        assert mock_get.call_count == 1
+
+        # Check that the records were swapped
+        assert len(repo.records) == 2
+
+        # Verify the template is gone and the rich one is in
+        titles = [r.input_first_authors_txt for r in repo.records]
+        assert "Lenard et al." in titles
+        assert "Other Author" in titles
+
+        updated_record = next(
+            r for r in repo.records if r.input_first_authors_txt == "Lenard et al."
+        )
+        assert updated_record.DOI == "https://doi.org"
+        assert updated_record.input_ISSN == "1752-0894"
+
+
+def test_update_all_skips_if_no_results_found(repo: WorkRepository):
+    """Verify that if get_work_metadata returns nothing, the template remains
+    untouched."""
+    template = WorkMetadata(
+        input_first_authors_txt="Unknown", input_year_and_suffix="2024"
+    )
+    repo.records = [template]
+
+    # Patch get_work_metadata to return an empty list
+    with patch.object(repo, "get_work_metadata", return_value=[]):
+        repo.update_all(ISSNs=["0000-0000"])
+
+        assert len(repo.records) == 1
+        assert repo.records[0].DOI is None  # Still a template

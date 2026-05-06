@@ -28,7 +28,20 @@ def test_work_metadata_identity_key_with_none_doi():
         DOI=None,
     )
 
-    expected_key = ("Smith", "2022", "1234-5678", None)
+    expected_key = ("Smith", "2022", None)
+    assert work.identity_key == expected_key
+
+
+def test_work_metadata_identity_key_with_none_input_issn_and_doi():
+    """Verify the key is consistent regardless of ISSN presence."""
+    work = WorkMetadata(
+        input_first_authors_txt="Smith",
+        input_year_and_suffix="2022",
+        input_ISSN=None,
+        DOI=None,
+    )
+
+    expected_key = ("Smith", "2022", None)
     assert work.identity_key == expected_key
 
 
@@ -50,8 +63,8 @@ def test_work_metadata_identity_key_with_actual_doi():
 
     # Keys must be unique despite identical inputs
     assert work_a.identity_key != work_b.identity_key
-    assert work_a.identity_key[3] == "10.1130/G49244.1"
-    assert work_b.identity_key[3] == "10.1130/DIFFERENT_DOI"
+    assert work_a.identity_key[2] == "10.1130/G49244.1"
+    assert work_b.identity_key[2] == "10.1130/DIFFERENT_DOI"
 
 
 def test_work_metadata_to_dict_includes_none():
