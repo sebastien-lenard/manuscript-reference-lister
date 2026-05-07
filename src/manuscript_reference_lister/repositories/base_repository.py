@@ -107,11 +107,12 @@ class BaseRepository[T: BaseSchema]:
             )
 
         data_to_save = [record.to_dict() for record in self.records]
-        json_data = json.dumps(data_to_save, indent=4, ensure_ascii=False)
         temp_path = target_path.with_suffix(".tmp")
 
         try:
-            temp_path.write_text(json_data, encoding="utf-8")
+            # Explicitly open the file with utf-8
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(data_to_save, f, indent=4, ensure_ascii=False)
             temp_path.replace(target_path)
         finally:
             if temp_path.exists():

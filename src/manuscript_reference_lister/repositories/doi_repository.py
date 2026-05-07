@@ -31,6 +31,7 @@ class DoiRepository:
             res = self.requests_wrapper.get(
                 self.config.doi_api_url.replace("{doi}", str(doi)), headers=headers
             )  # DOI Content Negotiation Service
+            res.encoding = "utf-8"
             return res.text.strip()
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:

@@ -112,3 +112,23 @@ def test_save_all_overwrite_existing(base_repo: MockRepository) -> None:
     saved_data = json.loads(path.read_text())
     assert len(saved_data) == 1
     assert saved_data[0]["id"] == 99
+
+
+def test_save_all_preserves_utf8(base_repo: MockRepository) -> None:
+    """Ensure non-ASCII characters are saved as literal UTF-8 in the JSON file."""
+    special_content = "Lavé & Keddadouche — 2020"
+    base_repo.records = [MockSchema(id=1, content=special_content)]
+
+    path = Path(base_repo.config.local_repo_dir_path) / base_repo.local_filename
+    base_repo.save_all()
+
+    # Read the raw file content to check for proper UTF-8 storage
+    raw_text = path.read_text(encoding="utf-8")
+
+    # ensure_ascii=False means we should see "é", not "\u00e9"
+    assert "é" in raw_text
+    assert "—" in raw_text
+
+    # Loading it back should match perfectly
+    base_repo.load_all()
+    assert base_repo.records[0].content == special_content
