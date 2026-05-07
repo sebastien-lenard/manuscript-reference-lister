@@ -1,7 +1,13 @@
 import logging
 
 from .parsers import CitationParser, JournalParser
-from .repositories import JournalRepository, StyleRepository, WorkRepository
+from .repositories import (
+    DoiRepository,
+    JournalRepository,
+    StyleRepository,
+    WorkRepository,
+)
+from .services import ReferenceService
 from .utils import DataLoader
 
 
@@ -36,4 +42,11 @@ def run(
     work_repo.merge_new_works(citations)
     ISSNs = list({j.ISSN for j in journal_repo.records if j.ISSN is not None})
     work_repo.update_all(ISSNs=ISSNs)
+
+    doi_repo = DoiRepository()
+    ReferenceService.fill_missing_references(
+        records=work_repo.records,
+        doi_repo=doi_repo,
+        target_style=style_repo.favored_style,
+    )
     work_repo.save_all()
