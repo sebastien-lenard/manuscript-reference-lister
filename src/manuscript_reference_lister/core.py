@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from .parsers import CitationParser, JournalParser
 from .repositories import (
@@ -7,12 +8,15 @@ from .repositories import (
     StyleRepository,
     WorkRepository,
 )
-from .services import ReferenceService
+from .services import BibliographyService, ReferenceService
 from .utils import DataLoader
 
 
 def run(
-    input_file_path: str | None, input_text: str | None, style: str = "apa"
+    input_file_path: str | None,
+    input_text: str | None,
+    style: str = "apa",
+    output_filepath: str | Path | None = None,
 ) -> None:
     """Orchestration of the manuscript-reference-lister pipeline."""
     if not input_text:
@@ -50,3 +54,12 @@ def run(
         target_style=style_repo.favored_style,
     )
     work_repo.save_all()
+
+    if not output_filepath:
+        output_filepath = work_repo.config.output_dir_path / "manuscript_references.csv"
+    else:
+        output_filepath = Path(output_filepath)
+
+    BibliographyService.export_to_csv(
+        citations=citations, works=work_repo.records, output_path=output_filepath
+    )

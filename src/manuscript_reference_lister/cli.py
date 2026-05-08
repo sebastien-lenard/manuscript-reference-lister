@@ -15,15 +15,25 @@ from .core import run
     "-t", "--text", type=str, default=None, help="Text to parse (can also be piped)"
 )
 @click.option(
+    "-o",
+    "--output_file",
+    type=str,
+    default=None,
+    help="Filepath for the output Bibliography CSV",
+)
+@click.option(
     "-v", "--verbose", count=True, help="Increase verbosity (-v (INFO), -vv (DEBUG))"
 )
-def main(input_file, text, verbose):
+def main(input_file, text, output_file, verbose):
     """\b
     CLI entry point.
     Examples:
-        # Pass source via flag
-        $ uv run python -m src.manuscript_reference_lister --file "manuscript.docx"
+        # Process a file and specify output
+        $ uv run python -m src.manuscript_reference_lister \
+            --f "C:\Documents\manuscript.docx -o "C:\Documents\bibliography.csv"
 
+        Output file can be omitted, default generated file is \
+            OUTPUT_DIR_PATH / "manuscript_references.csv"
         # Pipe source directly
         $ echo "Voila (Lenard et al., 2020)\r\nJournals\r\nNature Geoscience" | \
             uv run python -m src.manuscript_reference_lister
@@ -43,7 +53,7 @@ def main(input_file, text, verbose):
         text = sys.stdin.read().strip().encode("utf-8").decode("unicode_escape")
         text = text.replace("\r", "")
 
-    run(input_file_path=input_file, input_text=text)
+    run(input_file_path=input_file, input_text=text, output_filepath=output_file)
 
     click.echo("Done.")
 

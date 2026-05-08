@@ -46,8 +46,9 @@ The application uses environment variables for path management and API settings.
 ## 📖 Usage
 Run the tool using the uv run prefix.
 
-# Process a manuscript file
-```uv run references-lister --input_file "manuscript.docx"```
+# Process a manuscript file and specify output
+```uv run references-lister --f "manuscript.docx" -o "C:\Documents\bibliography.csv```
+Output file can be omitted, default generated file is OUTPUT_DIR_PATH / "manuscript_references.csv"
 # Pipe source directly
 ```echo "Text (Lenard et al., 2020)\r\nJournals\r\nNature Geoscience" | uv run references-lister```
 # Run tests
