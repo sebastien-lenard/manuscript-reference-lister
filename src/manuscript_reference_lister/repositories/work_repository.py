@@ -66,7 +66,7 @@ class WorkRepository(BaseRepository[WorkMetadata]):
             f"issn:{input_ISSN}",
         }
 
-        response = self.requests_wrapper.get(
+        response = self.http_client_wrapper.get(
             self.config.crossref_api_works_url, headers=self.headers, params=params
         )
         response.raise_for_status()

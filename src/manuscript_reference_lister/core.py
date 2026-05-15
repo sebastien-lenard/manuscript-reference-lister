@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 
+from .network import get_http_client_registry
 from .parsers import CitationParser, JournalParser
 from .repositories import (
     DoiRepository,
@@ -69,3 +70,6 @@ def run(
     BibliographyService.export_to_csv(
         citations=citations, works=work_repo.records, output_path=output_filepath
     )
+
+    get_http_client_registry().close_all()
+    get_http_client_registry.cache_clear()

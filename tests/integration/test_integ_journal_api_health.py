@@ -22,7 +22,7 @@ def check_integ_journals_api_health() -> None:
     try:
         # On utilise le wrapper du repo.
         # On force max_retries=1 pour un diagnostic "sec" sans répétition.
-        response = repo.requests_wrapper.get(
+        response = repo.http_client_wrapper.get(
             repo.config.crossref_api_journals_url,
             params={"query": input_title, "rows": 1},
             headers=headers,

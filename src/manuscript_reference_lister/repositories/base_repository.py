@@ -4,11 +4,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypeVar
 
+from manuscript_reference_lister.network import (
+    HTTPClientWrapper,
+    get_http_client_registry,
+)
 from manuscript_reference_lister.schemas import BaseSchema
 from manuscript_reference_lister.utils import (
     AppConfig,
     DataLoader,
-    RequestsWrapper,
     get_config,
 )
 
@@ -24,8 +27,11 @@ class BaseRepository[T: BaseSchema]:
         local_filename: str,
         model_class: type[T],
         config: AppConfig | None = None,
+        registry: HTTPClientWrapper | None = None,
     ):
         self.config = config or get_config()
+        registry = registry or get_http_client_registry()
+        self.http_client_wrapper = registry.get_client("crossref")
         self.headers = {
             "User-Agent": f"ManuscriptRefLister/1.0 (mailto:"
             f"{self.config.crossref_api_email})"
@@ -34,12 +40,6 @@ class BaseRepository[T: BaseSchema]:
         self._load_failed = False
         self.model_class = model_class
         self.records: list[T] = []
-        self.requests_wrapper = RequestsWrapper(
-            self.config.crossref_api_email,
-            timeout=self.config.crossref_api_timeout,
-            max_retries=self.config.crossref_api_max_retry,
-            delay=self.config.crossref_api_delay,
-        )
 
     def __len__(self) -> int:
         return len(self.records)

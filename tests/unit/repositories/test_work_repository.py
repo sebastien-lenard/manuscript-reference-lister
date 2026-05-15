@@ -21,7 +21,7 @@ def test_fetch_not_found(repo: WorkRepository) -> None:
     mock_resp = MagicMock(status_code=200)
     mock_resp.json.return_value = {"message": {"items": []}}
 
-    with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
+    with patch.object(repo.http_client_wrapper, "get", return_value=mock_resp):
         result = repo.get_work_metadata(
             CitationMetadata(
                 first_authors_txt="UnknownAuthor",
@@ -52,7 +52,7 @@ def test_returns_multiple_candidates(repo: WorkRepository) -> None:
         }
     }
 
-    with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
+    with patch.object(repo.http_client_wrapper, "get", return_value=mock_resp):
         results = repo.get_work_metadata(
             CitationMetadata(first_authors_txt="Lenard et al.", year_and_suffix="2020"),
             input_ISSN="1752-0894",
@@ -70,7 +70,9 @@ def test_parameterized_keywords(repo: WorkRepository) -> None:
 
     custom_kws = "Shifts in landslide frequency–area distribution"
 
-    with patch.object(repo.requests_wrapper, "get", return_value=mock_resp) as mock_get:
+    with patch.object(
+        repo.http_client_wrapper, "get", return_value=mock_resp
+    ) as mock_get:
         repo.get_work_metadata(
             CitationMetadata(
                 first_authors_txt="Guns and Vanacker",
@@ -106,7 +108,7 @@ def test_author_validation_filtering(repo: WorkRepository) -> None:
         }
     }
 
-    with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
+    with patch.object(repo.http_client_wrapper, "get", return_value=mock_resp):
         results = repo.get_work_metadata(
             CitationMetadata(
                 first_authors_txt="Guns et al.",

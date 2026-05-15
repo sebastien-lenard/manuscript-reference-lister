@@ -56,7 +56,7 @@ def check_integ_works_api_health():
 
         # 2. Deep check of the 'author' node format from Crossref
         # This is where we verify that the real API matches our assumptions
-        # Since we use repo.requests_wrapper, we can do a manual call if we want
+        # Since we use repo.http_client_wrapper, we can do a manual call if we want
         # to inspect but checking the candidates is enough.
 
         print("Verifying if Crossref provides the expected 'author' structure...")

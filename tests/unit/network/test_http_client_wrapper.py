@@ -1,118 +1,186 @@
+from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-import requests
+from pydantic import TypeAdapter, networks
 
-from manuscript_reference_lister.utils import RequestsWrapper
+from manuscript_reference_lister.network.http_client_wrapper import HTTPClientWrapper
 
 
 @pytest.fixture
-def wrapper() -> RequestsWrapper:
-    """Provides a RequestsWrapper instance with low backoff for fast testing."""
-    return RequestsWrapper(email="test@example.com", max_retries=3, backoff_factor=0.1)
+def wrapper() -> Generator[HTTPClientWrapper, None, None]:
+    """Provides an HTTPClientWrapper instance with low backoff for fast testing.
+
+    Note: We explicitly call wrapper.close() to free client resources.
+    """
+    client_wrapper = HTTPClientWrapper(
+        email="test@example.com", max_retries=3, backoff_factor=0.1
+    )
+    yield client_wrapper
+    client_wrapper.close()
 
 
-def test_get_success(wrapper: RequestsWrapper) -> None:
+def test_get_success(wrapper: HTTPClientWrapper) -> None:
     """Verify that a successful request returns the response immediately."""
-    with patch(
-        "manuscript_reference_lister.utils.requests_wrapper.requests.get"
-    ) as mock_get:
-        mock_response = MagicMock(status_code=200)
-        mock_get.return_value = mock_response
+    # On mocke directement la méthode .send() du client HTTPX interne
+    # C'est la méthode de base appelée par .get() sous le capot
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
 
+    with patch.object(wrapper.client, "send", return_value=mock_response) as mock_send:
         response = wrapper.get("https://api.test.com")
 
         assert response == mock_response
-        assert mock_get.call_count == 1
+        assert mock_send.call_count == 1
 
 
-def test_get_retry_on_timeout(wrapper: RequestsWrapper) -> None:
-    """Verify that the wrapper retries upon receiving a Timeout exception."""
+def test_get_retry_on_timeout(wrapper: HTTPClientWrapper) -> None:
+    """Verify that the wrapper retries upon receiving a TransportError exception."""
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+
     # Simulate two failures followed by one success
+    request_obj = httpx.Request("GET", "https://api.test.com")
+
     with (
+        patch.object(wrapper.client, "send") as mock_send,
         patch(
-            "manuscript_reference_lister.utils.requests_wrapper.requests.get"
-        ) as mock_get,
-        patch(
-            "manuscript_reference_lister.utils.requests_wrapper.time.sleep"
+            "manuscript_reference_lister.network.http_client_wrapper.time.sleep"
         ) as mock_sleep,
     ):
-        mock_get.side_effect = [
-            requests.exceptions.Timeout("Slow connection"),
-            requests.exceptions.Timeout("Still slow"),
-            MagicMock(status_code=200),
+        mock_send.side_effect = [
+            httpx.ReadTimeout("Slow connection", request=request_obj),
+            httpx.ReadTimeout("Still slow", request=request_obj),
+            mock_response,
         ]
 
         wrapper.get("https://api.test.com")
 
-        assert mock_get.call_count == 3
+        assert mock_send.call_count == 3
         assert mock_sleep.call_count == 3  # Initial delay + 2 retries
 
 
-def test_get_max_retries_reached(wrapper: RequestsWrapper) -> None:
+def test_get_max_retries_reached(wrapper: HTTPClientWrapper) -> None:
     """Verify the wrapper raises the last exception after max retries are exhausted."""
-    with (
-        patch(
-            "manuscript_reference_lister.utils.requests_wrapper.requests.get"
-        ) as mock_get,
-        patch("manuscript_reference_lister.utils.requests_wrapper.time.sleep"),
-    ):
-        mock_get.side_effect = requests.exceptions.ConnectionError("Down")
+    request_obj = httpx.Request("GET", "https://api.test.com")
 
-        with pytest.raises(requests.exceptions.ConnectionError):
+    with (
+        patch.object(wrapper.client, "send") as mock_send,
+        patch("manuscript_reference_lister.network.http_client_wrapper.time.sleep"),
+    ):
+        mock_send.side_effect = httpx.ConnectError("Down", request=request_obj)
+
+        with pytest.raises(httpx.ConnectError):
             wrapper.get("https://api.test.com")
 
-        assert mock_get.call_count == 3
+        assert mock_send.call_count == 3
 
 
-def test_get_fatal_http_error(wrapper: RequestsWrapper) -> None:
+def test_get_fatal_http_error(wrapper: HTTPClientWrapper) -> None:
     """Verify that fatal HTTP errors (like 404) raise immediately without retry."""
-    with patch(
-        "manuscript_reference_lister.utils.requests_wrapper.requests.get"
-    ) as mock_get:
-        mock_response = MagicMock()
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-            "404 Not Found"
-        )
-        mock_get.return_value = mock_response
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 404
 
-        with pytest.raises(requests.exceptions.HTTPError):
+    request_obj = httpx.Request("GET", "https://api.test.com")
+    mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "404 Not Found", request=request_obj, response=mock_response
+    )
+
+    with patch.object(wrapper.client, "send", return_value=mock_response):
+        with pytest.raises(httpx.HTTPStatusError):
             wrapper.get("https://api.test.com")
 
         # Fatal errors should stop at the first attempt
-        assert mock_get.call_count == 1
+        assert wrapper.client.send.call_count == 1
 
 
-def test_get_max_retries_override(wrapper: RequestsWrapper) -> None:
+def test_get_max_retries_override(wrapper: HTTPClientWrapper) -> None:
     """Verify that the max_retries parameter in get() overrides the instance default."""
+    request_obj = httpx.Request("GET", "https://api.test.com")
+
     with (
+        patch.object(wrapper.client, "send") as mock_send,
         patch(
-            "manuscript_reference_lister.utils.requests_wrapper.requests.get"
-        ) as mock_get,
-        patch(
-            "manuscript_reference_lister.utils.requests_wrapper.time.sleep"
+            "manuscript_reference_lister.network.http_client_wrapper.time.sleep"
         ) as mock_sleep,
     ):
-        mock_get.side_effect = requests.exceptions.ConnectionError("Down")
+        mock_send.side_effect = httpx.ConnectError("Down", request=request_obj)
 
         # Override instance default (3) with a single attempt
-        with pytest.raises(requests.exceptions.ConnectionError):
+        with pytest.raises(httpx.ConnectError):
             wrapper.get("https://api.test.com", max_retries=1)
 
-        assert mock_get.call_count == 1
+        assert mock_send.call_count == 1
         assert mock_sleep.call_count == 1
 
 
-def test_get_with_custom_headers(wrapper: RequestsWrapper) -> None:
-    """Verify that custom headers are correctly passed to the requests call."""
-    with patch(
-        "manuscript_reference_lister.utils.requests_wrapper.requests.get"
-    ) as mock_get:
-        mock_response = MagicMock(status_code=200)
-        mock_get.return_value = mock_response
+def test_get_with_custom_headers(wrapper: HTTPClientWrapper) -> None:
+    """Verify that custom headers are correctly passed to the httpx call."""
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
 
+    with patch.object(wrapper.client, "send", return_value=mock_response) as mock_send:
         custom_headers = {"Accept": "text/x-bibliography"}
         wrapper.get("https://api.test.com", headers=custom_headers)
 
-        _, kwargs = mock_get.call_args
-        assert kwargs["headers"] == custom_headers
+        called_request = mock_send.call_args[0][0]
+        assert called_request.headers["Accept"] == "text/x-bibliography"
+
+
+def test_get_follows_redirects(wrapper: HTTPClientWrapper) -> None:
+    """Verify that the underlying client correctly follows HTTP redirects (302)."""
+    request_initial = httpx.Request("GET", "https://doi.org/10.1038/sample")
+    request_redirected = httpx.Request("GET", "https://api.crossref.org/transform")
+
+    response_302 = httpx.Response(
+        status_code=302,
+        headers={"Location": "https://api.crossref.org/transform"},
+        request=request_initial,
+    )
+
+    response_200 = httpx.Response(
+        status_code=200,
+        text="Ceci est la référence finale",
+        request=request_redirected,
+    )
+
+    response_200.history.append(response_302)
+
+    with patch.object(wrapper.client, "send", return_value=response_200) as mock_send:
+        response = wrapper.get("https://doi.org/10.1038/sample")
+
+        assert response.status_code == 200
+        assert response.text == "Ceci est la référence finale"
+        assert len(response.history) == 1
+        assert response.history[0].status_code == 302
+        mock_send.assert_called_once()
+
+
+def test_get_accepts_and_converts_pydantic_http_url(wrapper: HTTPClientWrapper) -> None:
+    """Verify that the get method explicitly converts a Pydantic HttpUrl object
+    into a primitive string before passing it to the HTTPX client.
+    """
+    url_raw = "https://api.crossref.org/styles"
+    # Creation of a Pydantic HttpUrl (Pydantic v2)
+    pydantic_url = TypeAdapter(networks.HttpUrl).validate_python(
+        "https://api.crossref.org/styles"
+    )
+
+    mock_request = httpx.Request("GET", url_raw)
+    mock_response = httpx.Response(
+        status_code=200, text="mock_data", request=mock_request
+    )
+
+    with patch.object(
+        wrapper.client, "get", return_value=mock_response
+    ) as mock_httpx_get:
+        response = wrapper.get(url=pydantic_url)
+
+        assert response.status_code == 200
+
+        called_args, _ = mock_httpx_get.call_args
+        actual_url_passed = called_args[0]
+
+        assert isinstance(actual_url_passed, str)
+        assert actual_url_passed == url_raw

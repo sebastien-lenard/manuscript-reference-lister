@@ -37,7 +37,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         }
 
         journal_records = []
-        response = self.requests_wrapper.get(
+        response = self.http_client_wrapper.get(
             self.config.crossref_api_journals_url, params=params, headers=self.headers
         )
         response.raise_for_status()
@@ -101,7 +101,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
             "rows": 1,
             "mailto": self.config.crossref_api_email,
         }
-        response = self.requests_wrapper.get(
+        response = self.http_client_wrapper.get(
             self.config.crossref_api_journals_issn_url.replace("{issn}", str(issn)),
             params=params,
             headers=self.headers,

@@ -2,20 +2,22 @@ import logging
 
 import requests
 
-from manuscript_reference_lister.utils import AppConfig, RequestsWrapper, get_config
+from manuscript_reference_lister.network import (
+    HTTPClientWrapper,
+    get_http_client_registry,
+)
+from manuscript_reference_lister.utils import AppConfig, get_config
 
 
 class DoiRepository:
     """Handles information specific to the DOI of a work."""
 
-    def __init__(self, config: AppConfig | None = None):
+    def __init__(
+        self, config: AppConfig | None = None, registry: HTTPClientWrapper | None = None
+    ):
         self.config = config or get_config()
-        self.requests_wrapper = RequestsWrapper(
-            self.config.crossref_api_email,
-            timeout=self.config.doi_api_timeout,
-            max_retries=self.config.doi_api_max_retry,
-            delay=self.config.doi_api_delay,
-        )
+        registry = registry or get_http_client_registry()
+        self.http_client_wrapper = registry.get_client("doi")
 
     def get_reference(self, doi: str, style: str = "apa") -> str:
         """Gets the reference formatted to a style and ready to include in a
@@ -28,7 +30,7 @@ class DoiRepository:
         headers = {"Accept": f"text/x-bibliography; style={style}"}
 
         try:
-            res = self.requests_wrapper.get(
+            res = self.http_client_wrapper.get(
                 self.config.doi_api_url.replace("{doi}", str(doi)), headers=headers
             )  # DOI Content Negotiation Service
             res.encoding = "utf-8"

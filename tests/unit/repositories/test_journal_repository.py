@@ -36,7 +36,7 @@ def test_get_journal_metadata_success(repo: JournalRepository) -> None:
         }
     }
 
-    with patch.object(repo.requests_wrapper, "get") as mock_get:
+    with patch.object(repo.http_client_wrapper, "get") as mock_get:
         mock_get.side_effect = [mock_main, mock_year, mock_year]
 
         results = repo.get_journal_metadata("Geology")
@@ -54,7 +54,7 @@ def test_get_journal_metadata_not_found_behavior(
     mock_resp = MagicMock(status_code=200)
     mock_resp.json.return_value = {"message": {"items": []}}
 
-    with patch.object(repo.requests_wrapper, "get", return_value=mock_resp):
+    with patch.object(repo.http_client_wrapper, "get", return_value=mock_resp):
         with caplog.at_level(logging.WARNING):
             results = repo.get_journal_metadata("Unknown Journal")
 
@@ -88,7 +88,7 @@ def test_get_issn_year_endpoint_success(
     }
 
     with patch.object(
-        repo.requests_wrapper, "get", return_value=mock_response
+        repo.http_client_wrapper, "get", return_value=mock_response
     ) as mock_get:
         result = repo.get_issn_year_endpoint("1234-5678", order)
         assert result == expected_year
@@ -111,7 +111,7 @@ def test_get_issn_year_endpoint_no_items(repo: JournalRepository) -> None:
     mock_response = MagicMock()
     mock_response.json.return_value = {"message": {"items": []}}
     with patch.object(
-        repo.requests_wrapper, "get", return_value=mock_response
+        repo.http_client_wrapper, "get", return_value=mock_response
     ) as mock_get:
         result = repo.get_issn_year_endpoint("0000-0000", "asc")
         assert result is None
@@ -132,7 +132,7 @@ def test_get_issn_year_endpoint_partial_dates(repo: JournalRepository) -> None:
         }
     }
     with patch.object(
-        repo.requests_wrapper, "get", return_value=mock_response
+        repo.http_client_wrapper, "get", return_value=mock_response
     ) as mock_get:
         assert repo.get_issn_year_endpoint("1111-2222", "asc") == 2010
         mock_get.assert_called_once()
@@ -159,7 +159,7 @@ def test_get_journal_metadata_multiple_issns(repo: JournalRepository) -> None:
         }
         return m
 
-    with patch.object(repo.requests_wrapper, "get") as mock_get:
+    with patch.object(repo.http_client_wrapper, "get") as mock_get:
         mock_get.side_effect = [
             mock_main,
             year_mock(1869),

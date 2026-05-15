@@ -1,13 +1,13 @@
 import logging
 import time
 
-import requests
+import httpx
 
 # Define a logger for this module
 logger = logging.getLogger(__name__)
 
 
-class RequestsWrapper:
+class HTTPClientWrapper:
     def __init__(
         self,
         email: str,
@@ -26,6 +26,9 @@ class RequestsWrapper:
         self.max_retries = max_retries
         self.backoff_factor = backoff_factor
         self.delay = delay
+        self.client = httpx.Client(
+            timeout=httpx.Timeout(self.timeout), follow_redirects=True
+        )
 
     def get(
         self,
@@ -33,11 +36,14 @@ class RequestsWrapper:
         params: dict | None = None,
         headers: dict | None = None,
         max_retries: int | None = None,
-    ) -> None:
+    ) -> httpx.Response:
         """
         Performs a GET request with retry logic for network-related errors.
         Fatal errors (like 404 or malformed responses) raise immediately.
+        Ensures the URL is a plain string for HTTPX compatibility
         """
+        url = str(url)
+
         if params is None:
             params = {}
         if headers is None:
@@ -52,25 +58,20 @@ class RequestsWrapper:
         last_exception = None
 
         for attempt in range(max_retries):
-            # 1. We apply the safety delay before the actual request
+            # We apply the safety delay before the actual request
             if attempt == 0 and self.delay > 0:
                 time.sleep(self.delay)
             try:
-                response = requests.get(
-                    url, params=params, headers=headers, timeout=self.timeout
-                )
+                response = self.client.get(url, params=params, headers=headers)
 
-                # If we get a 4xx or 5xx, this raises an HTTPError
+                # If we get a 4xx or 5xx, this raises an httpx.HTTPStatusError
                 response.raise_for_status()
 
                 # Success: return the response object
                 return response
 
-            except (
-                requests.exceptions.ConnectionError,
-                requests.exceptions.Timeout,
-                requests.exceptions.ChunkedEncodingError,
-            ) as e:
+            # Timeout, ConnectError, NetworkError
+            except httpx.TransportError as e:
                 last_exception = e
                 wait_time = self.backoff_factor**attempt
 
@@ -87,7 +88,7 @@ class RequestsWrapper:
                 if attempt < max_retries - 1:
                     time.sleep(wait_time)
 
-            except requests.exceptions.HTTPError as e:
+            except httpx.HTTPStatusError as e:
                 # Fatal HTTP errors (like 401, 404, 403) are not solved by retrying
                 logger.error("Fatal HTTP Error for URL %s: %s", url, e)
                 raise e
@@ -98,5 +99,9 @@ class RequestsWrapper:
                 raise e
 
         # If we reach here, it means all retries failed
-        logger.error("All %d retries failed for URL %s", self.max_retries, url)
+        logger.error("All %d retries failed for URL %s", max_retries, url)
         raise last_exception
+
+    def close(self) -> None:
+        """Close the underlying HTTPX client."""
+        self.client.close()

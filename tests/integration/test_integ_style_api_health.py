@@ -28,7 +28,7 @@ def check_style_api_health() -> None:
             sys.exit(1)
 
         # Check for Polite Pool headers for extra safety
-        response = repo.requests_wrapper.get(
+        response = repo.http_client_wrapper.get(
             repo.config.crossref_api_styles_url, headers=headers, max_retries=1
         )
 
