@@ -106,7 +106,7 @@ class BaseRepository[T: BaseSchema]:
                 f"Previous load failed; diverting to recovery file: {target_path}"
             )
 
-        data_to_save = [record.to_dict() for record in self.records]
+        data_to_save = [record.model_dump() for record in self.records]
         temp_path = target_path.with_suffix(".tmp")
 
         try:

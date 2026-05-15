@@ -1,6 +1,5 @@
 import logging
 import time
-from dataclasses import astuple
 from datetime import date, datetime, timedelta
 from typing import Literal
 
@@ -129,7 +128,8 @@ class JournalRepository(BaseRepository[JournalMetadata]):
 
         expiration_date = date.today() - timedelta(days=self.config.journal_update_days)
         logging.info(
-            f"Updating journals without metadata or metadata older than {str(expiration_date)}..."
+            f"Updating journals without metadata or metadata older than "
+            f"{str(expiration_date)}..."
         )
         missing_metadata: list[JournalMetadata] = []
         expired_metadata: list[JournalMetadata] = []
@@ -138,12 +138,14 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         for record in self.records:
             last_update = datetime.strptime(record.update, "%Y-%m-%d").date()
 
-            if None in astuple(record):
+            has_missing_data = any(v is None for v in record.model_dump().values())
+            if has_missing_data:
                 missing_metadata.append(record)
             elif last_update < expiration_date:
                 expired_metadata.append(record)
             else:
                 valid_metadata.append(record)
+
         logging.info(f"Journals with missing metadata: {len(missing_metadata)}")
         logging.info(f"Journals with expired metadata: {len(expired_metadata)}")
         records_to_update = missing_metadata + expired_metadata

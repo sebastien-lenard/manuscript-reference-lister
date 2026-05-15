@@ -1,15 +1,19 @@
-from dataclasses import dataclass
 from typing import Literal, override
+
+from pydantic import Field
 
 from .base_schema import BaseSchema
 
 
-@dataclass
 class CitationMetadata(BaseSchema):
     """Represents validated metadata for a citation in a manuscript."""
 
-    first_authors_txt: str  # e.g. Lenard et al., Guns and Vanacker
-    year_and_suffix: str  # e.g. 2020a
+    model_config = {"frozen": True}
+
+    first_authors_txt: str = Field(
+        min_length=1
+    )  # e.g. Lenard et al., Guns and Vanacker
+    year_and_suffix: str = Field(pattern=r"^\d{4}[a-z]?$")  # e.g. 2020a
     type: Literal["narrative", "parenthetical"] = "narrative"
 
     @override

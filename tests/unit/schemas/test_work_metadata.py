@@ -51,7 +51,7 @@ def test_work_metadata_identity_key_with_actual_doi():
         input_first_authors_txt="Guns and Vanacker",
         input_year_and_suffix="2021",
         input_ISSN="0016-7606",
-        DOI="10.1130/G49244.1",
+        DOI="10.1130/g49244.1",
     )
 
     work_b = WorkMetadata(
@@ -63,8 +63,8 @@ def test_work_metadata_identity_key_with_actual_doi():
 
     # Keys must be unique despite identical inputs
     assert work_a.identity_key != work_b.identity_key
-    assert work_a.identity_key[2] == "10.1130/G49244.1"
-    assert work_b.identity_key[2] == "10.1130/DIFFERENT_DOI"
+    assert work_a.identity_key[2] == "10.1130/g49244.1"
+    assert work_b.identity_key[2] == "10.1130/different_doi"
 
 
 def test_work_metadata_to_dict_includes_none():
@@ -76,5 +76,17 @@ def test_work_metadata_to_dict_includes_none():
         DOI=None,
     )
 
-    data = work.to_dict()
+    data = work.model_dump()
     assert data["DOI"] is None
+
+
+def test_work_metadata_doi_normalization():
+    """Verify that DOI is automatically converted to lower case at instantiation."""
+    work = WorkMetadata(
+        input_first_authors_txt="Lenard",
+        input_year_and_suffix="2020",
+        DOI="10.1038/NATURE123",
+    )
+
+    assert work.DOI == "10.1038/nature123"
+    assert work.identity_key[2] == "10.1038/nature123"

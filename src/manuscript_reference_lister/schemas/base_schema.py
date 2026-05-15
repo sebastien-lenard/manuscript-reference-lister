@@ -1,25 +1,14 @@
-from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, fields
-from typing import Self
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass
-class BaseSchema(ABC):
-    """Base class providing common serialization methods for metadata."""
+class BaseSchema(BaseModel):
+    """Base class providing common configuration for all metadata models."""
 
-    def to_dict(self) -> dict:
-        """Converts the instance into a JSON-serializable dictionary."""
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: dict) -> Self:
-        """Creates an instance while ignoring extra keys not defined in the schema."""
-        # This dynamically finds the fields for whatever class calls it
-        class_fields = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in data.items() if k in class_fields})
+    model_config = ConfigDict(
+        populate_by_name=True, from_attributes=True, extra="ignore"
+    )
 
     @property
-    @abstractmethod
     def identity_key(self):
         """Return a unique identifier for deduplication."""
         raise NotImplementedError("Subclasses must implement identity_key")

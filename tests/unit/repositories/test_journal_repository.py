@@ -262,7 +262,10 @@ def test_update_all_priority_and_limit(
         assert mock_get.call_count == 1
         mock_get.assert_called_with("Missing")
         assert repo.has_pending_updates is True
-        assert any(j.ISSN == "1111-2222" for j in repo.records)
+        assert any(
+            isinstance(j, JournalMetadata) and j.ISSN == "1111-2222"
+            for j in repo.records
+        )
         # Verify 'Recent' was moved to valid_metadata untouched
         assert any(
             j.input_title == "Recent" and j.ISSN == "9012-3456" for j in repo.records

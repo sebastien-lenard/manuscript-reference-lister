@@ -1,5 +1,8 @@
 from datetime import date
 
+import pytest
+from pydantic import ValidationError
+
 from manuscript_reference_lister.schemas import JournalMetadata
 
 
@@ -14,3 +17,51 @@ def test_journal_metadata_identity_key():
     """Ensure deduplication key is composed correctly."""
     journal = JournalMetadata(input_title="Nature", ISSN="1234-5678")
     assert journal.identity_key == ("Nature", "1234-5678")
+
+
+def test_journal_metadata_issn_formatting():
+    """Verify that ISSN is automatically formatted with a hyphen."""
+    journal = JournalMetadata(input_title="Test", ISSN="12345678")
+    assert journal.ISSN == "1234-5678"
+
+    journal_ok = JournalMetadata(input_title="Test", ISSN="1234-5678")
+    assert journal_ok.ISSN == "1234-5678"
+
+
+@pytest.mark.parametrize("invalid_year", [1599, 2101])
+def test_journal_metadata_year_bounds(invalid_year):
+    """Ensure years outside 1600-2099 raise a ValidationError."""
+    with pytest.raises(ValidationError) as excinfo:
+        JournalMetadata(input_title="Test", start_year=invalid_year)
+
+    errors = str(excinfo.value)
+    assert (
+        "greater than or equal to 1600" in errors
+        or "less than or equal to 2099" in errors
+    )
+
+
+def test_journal_metadata_year_range_logic():
+    """Ensure start_year cannot be greater than end_year."""
+    with pytest.raises(ValidationError) as excinfo:
+        JournalMetadata(input_title="Test", start_year=2025, end_year=2020)
+
+    assert "start_year (2025) should be lower than end_year (2020)" in str(
+        excinfo.value
+    )
+
+
+def test_journal_metadata_valid_year_range():
+    """Ensure correct year ranges are accepted."""
+    journal = JournalMetadata(input_title="Test", start_year=2020, end_year=2025)
+    assert journal.start_year == 2020
+    assert journal.end_year == 2025
+
+
+def test_journal_metadata_extra_fields_ignored():
+    """Verify that extra keys from API data are silently ignored."""
+    data = {"input_title": "Nature", "extra_api_garbage": "should_not_exist"}
+
+    journal = JournalMetadata(**data)
+    assert journal.input_title == "Nature"
+    assert not hasattr(journal, "extra_api_garbage")

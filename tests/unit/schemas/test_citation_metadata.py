@@ -22,3 +22,15 @@ def test_citation_metadata_identity_key():
 
     expected_key = ("Guns and Vanacker", "2021")
     assert citation.identity_key == expected_key
+
+
+def test_citation_metadata_deduplication_logic():
+    """Check that 2 distinct types of citation generate same key."""
+    cit1 = CitationMetadata(
+        first_authors_txt="Lenard et al.", year_and_suffix="2020", type="narrative"
+    )
+    cit2 = CitationMetadata(
+        first_authors_txt="Lenard et al.", year_and_suffix="2020", type="parenthetical"
+    )
+
+    assert cit1.identity_key == cit2.identity_key
