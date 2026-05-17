@@ -6,6 +6,8 @@ from manuscript_reference_lister.network import (
 )
 from manuscript_reference_lister.utils import AppConfig, get_config
 
+logger = logging.getLogger(__name__)
+
 
 class StyleRepository:
     """Handles information about reference styles."""
@@ -16,8 +18,7 @@ class StyleRepository:
         config: AppConfig | None = None,
         registry: HTTPClientWrapper | None = None,
     ):
-        """
-        Examples of styles:
+        """Examples of styles:
         apa (AGU, Wiley), copernicus-publications (EGU), elsevier-harvard (Elsevier),
         chicago-author-date (Taylor & Francis), springer-basic-author-date (Springer),
         etc.
@@ -33,13 +34,30 @@ class StyleRepository:
         self.favored_style_is_valid = None
 
     def validate_favored_style(self) -> None:
-        """Check is the favored reference style is in the repository and supported."""
+        """Check if the favored reference style is in the repository and supported."""
         response = self.http_client_wrapper.get(
             self.config.crossref_api_styles_url, headers=self.headers
         )
         valid_styles = response.json()["message"]["items"]
         if self.favored_style in valid_styles:
             self.favored_style_is_valid = True
+            logger.info(
+                "Favored reference style validated successfully: %s",
+                self.favored_style,
+                extra={
+                    "status": "OK",
+                    "event": "style_validation_success",
+                    "style": self.favored_style,
+                },
+            )
         else:
             self.favored_style_is_valid = False
-            logging.warning("Invalid style %s.", self.favored_style)
+            logger.warning(
+                "Favored reference style invalid: %s",
+                self.favored_style,
+                extra={
+                    "status": "KO",
+                    "event": "style_validation_failed",
+                    "style": self.favored_style,
+                },
+            )

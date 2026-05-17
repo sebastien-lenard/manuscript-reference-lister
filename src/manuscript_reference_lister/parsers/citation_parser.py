@@ -4,6 +4,8 @@ import re
 from manuscript_reference_lister.schemas import CitationMetadata
 from manuscript_reference_lister.utils import AppConfig, get_config
 
+logger = logging.getLogger(__name__)
+
 
 class CitationParser:
     """Handles extraction of citations from raw text."""
@@ -99,9 +101,22 @@ class CitationParser:
                 clean_group = group.strip()
                 # Clean the group of blacklist words
                 for word in self.blacklist:
-                    clean_group = re.sub(
-                        rf"\b{word}\b[. ,]*", "", clean_group, flags=re.IGNORECASE
-                    )
+                    if re.search(rf"\b{word}\b", clean_group, flags=re.IGNORECASE):
+                        previous_group = clean_group
+                        clean_group = re.sub(
+                            rf"\b{word}\b[. ,]*", "", clean_group, flags=re.IGNORECASE
+                        )
+                        logger.debug(
+                            "Blacklist word '%s' stripped from parenthetical group",
+                            word,
+                            extra={
+                                "status": "OK",
+                                "event": "parser_blacklist_match",
+                                "word": word,
+                                "before": previous_group,
+                                "after": clean_group,
+                            },
+                        )
 
                 # Requirement: Group must contain an author pattern followed by year(s).
                 # This prevents capturing isolated dates like (2020) or (in 2020).
@@ -117,5 +132,13 @@ class CitationParser:
                                 type="parenthetical",
                             )
                         )
-        logging.info(f"Parsed {len(results)} unique citations.")
+        logger.info(
+            "Extracted %d raw citations from text",
+            len(results),
+            extra={
+                "status": "OK",
+                "event": "citation_extraction_completed",
+                "raw_count": len(results),
+            },
+        )
         return results

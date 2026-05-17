@@ -1,0 +1,113 @@
+import logging.config
+import os
+import sys
+import tempfile
+import uuid
+from pathlib import Path
+
+from dotenv import dotenv_values
+
+# 1. Génération d'un run_id unique pour TOUTE la durée d'exécution de cette session CLI
+# On prend les 8 premiers caractères d'un UUID4 pour que ce soit concis mais unique
+RUN_ID = str(uuid.uuid4())[:8]
+
+
+class RunIdFilter(logging.Filter):
+    """Injects session run_id automatically in log."""
+
+    def filter(self, record):
+        record.run_id = RUN_ID
+        return True
+
+
+def get_safe_log_dir() -> Path:
+    """Get .env LOG_DIR_PATH or shifts to OS temporary directory subfolder
+    (Windows/Linux/macOS)."""
+    try:
+        env_vars = dotenv_values(".env")
+        if "LOG_DIR_PATH" in env_vars and env_vars["LOG_DIR_PATH"]:
+            return Path(env_vars["LOG_DIR_PATH"].strip('"').strip("'"))
+    except Exception:
+        pass
+
+    # Fallback solution C:\Users\Nom\AppData\Local\Temp\manuscript-reference-lister
+    # on Windows or /tmp/manuscript-reference-lister on Linux/MacOS
+    return Path(tempfile.gettempdir()) / "manuscript-reference-lister"
+
+
+def get_logging_config(log_dir: Path, verbose_level: int = 0) -> dict:
+    """Log configuration dictionary."""
+    console_level = "WARNING"
+    if verbose_level == 1:
+        console_level = "INFO"
+    elif verbose_level >= 2:
+        console_level = "DEBUG"
+
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "filters": {
+            "run_id_filter": {
+                "()": RunIdFilter,
+            }
+        },
+        "formatters": {
+            "human": {
+                "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+                "datefmt": "%H:%M:%S",
+            },
+            "json": {
+                "()": "pythonjsonlogger.json.JsonFormatter",
+                "format": (
+                    "%(asctime)s %(levelname)s %(run_id)s %(name)s %(message)s",
+                ),
+            },
+        },
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "human",
+                "level": console_level,
+                "stream": "ext://sys.stderr",
+            },
+            "file": {
+                "class": "logging.handlers.RotatingFileHandler",
+                "formatter": "json",
+                "level": "DEBUG",
+                "filename": str(log_dir / "app.json.log"),
+                "maxBytes": 10485760,  # 10 MB
+                "backupCount": 5,
+                "encoding": "utf8",
+                "filters": ["run_id_filter"],
+            },
+        },
+        "loggers": {
+            "manuscript_reference_lister": {
+                "handlers": ["console"]
+                if os.environ.get("ENV") == "test"
+                else ["console", "file"],
+                # Avoid big files in testing phase
+                "level": "DEBUG",
+                "propagate": False,
+            },
+        },
+    }
+
+
+def setup_logging(verbose_level: int = 0) -> Path:
+    """Set up global log system and returns log path."""
+    log_dir = get_safe_log_dir()
+
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        config = get_logging_config(log_dir, verbose_level=verbose_level)
+        logging.config.dictConfig(config)
+    except Exception as e:
+        # Fallback to stderr if locked disk
+        print(
+            f"CRITICAL: Failed to initialize log directory at {log_dir}: {e}",
+            file=sys.stderr,
+        )
+        logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
+
+    return log_dir

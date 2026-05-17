@@ -561,4 +561,566 @@ interactions:
     status:
       code: 200
       message: OK
+- request:
+    body: ''
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Host:
+      - api.crossref.org
+      User-Agent:
+      - ManuscriptRefLister/1.0 (mailto:roger.dupont@gmail.com)
+    method: GET
+    uri: https://api.crossref.org/journals?query=The+Journal+of+Geology&rows=1&mailto=roger.dupont%40gmail.com
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAA/7VYS2/jNhD+K4HO1ILvR649FO2hKLDtKchBlulEG0Vy9dhtEOS/d+ghaVu2skG3
+        RQ75PBzOi8P5aL8W41RN81jcFv1TQYpnP47Vgy+nl70H2Zd+HrqqLdtmnE5Wv/phbPoOFNgn+oke
+        V4rb16KZ/PNY7v1Q7g8SRoq/Zj+8hDVwNkxl023938UtJcXoq6F+LCc/PIcQ/nj0N7+iy5t+d/Oz
+        79v+4aV4I8XUTxDG4Me5nUBTEXRT3N69Fm01TiWmUdaPvn4qp+Y5ODbGOqOtVVwZUtT93IW9r0U9
+        D4PvpnLbN/CZQRybqn7aNa1PIk6NTE6zyEoIZDP46mnbf+sOlsJauXkpm3Gc/bZ8gXQgpDvmhCRM
+        sXsCkHPCpDtAZgDyA1SMMGEOUByhUQAVQpGhcAAlQpGhCdsE2tUA0S4FFwIdCzDGo2PQ5dGbBYgW
+        KM1QgguOxgRY4GiM0QwFuOBol/EMeZDSAKHShDH0RsEFs6gQIDqmLkHrVJYqcME0JhR0Y/IyQx22
+        YQxcZaggBkYxMpohh200xgAZU4xBg10aHesEnYF4KTrmLkOmMnRgl2IM0iZoXYZOwVlQLB83Gbrg
+        GCtpdYYmGIsnpBO0zmUpC8awqCYoYEKGZ2gdcZiaVsRhZpInZAFhXpYmpEVCSibkQIbpWZWQ1gmp
+        LLOWOMzSioxYQoInxLNMgZVYDJGQNcRhelYmJEGGeUqaEIXV2EUiIicZsQ5lMiJnHLHxTGVC0Es2
+        5sETUi4hZhOieVVTYmNvgQ+MVNmEHOjhmWmTkBQJQZfb2IEZMYgF8wiRxuh1QtByJp6WSogCilEJ
+        YqJlSzRmySnR4bQ4hYukNSJFdNRzCTFAHFc50QyRIJoiohkZohwihghikVmmiYreZEaOKLQME0Ch
+        ZZgx0iIyRKIeRCCjHsuIExl3WCLQB3SJiHslEZgRNPxhvMEqJYeRBghkuBeGZkRwIzl6O9zu+3sY
+        wvt5A4z06IfIGX92zYGSppdAGz89NnX10N/8DnQxFmHww2Ikp2oHY76pJmAvIAvkAWCiT4GLmuem
+        rQYwgizSdA9HDRY0tn6sh2Z/bfPQD2WzXUp3MzDdAAwR6SWK26b23egv5En93MhZyGc7oNaSC2Fh
+        TlMlNdz3AlIG/qw9MHb3dOGgH+oQ5EI677fV5Mt9D3E1fi2z66a+X8LTfTA4hBBw8TVMVw7kAfHu
+        PBioF8VgWgm4f6EPFDfAiue1X8RSfauGbdnNz5srxV5mt3YWi6KfmVysbcZpqOrpwtai+Gu7FvU9
+        VuBkwYQ3TzMF02uvIij3vPni6/Cmubs/tnl8u0Gvt23498Hn0Wmb5e6CpwS1ocmosOYkh7MmWFTy
+        Iq94oFbAy0ED7zMDUzQ1+3rnpIYBlhQGSBlmOV8czHmLXj/wq2cThadNdRC9HZ+CP1q6xcX8odIt
+        7sKHS3d+1/730uX+/feV+5FCfayp2MX1/u9LAbXYtdUDfkXw+x6YaSyvDIBd1Y6eHFWWQ3WxXtxO
+        w3yqv0INC631Cbj0//78Xjq/PiKXNteG4oXekkGXCvDNsalb/50qrG6/INfLQK9Q0cLVJRleRHmF
+        HJY6V/j/wswKpS31rj9J3kkt6ywzW3s4vOtxXe3iqbF2Husaq++Sj7TtWp6XfH+wBjf2l8+ffwMm
+        LeA1zUv4Qq6BYZkSplRcuwIIFr7kd5Fc716L+AvJfmi68NPI16qdw+fj7jeSlXwLND30XVOfaB5t
+        v93D39s/ahBk3IsRAAA=
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '1325'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 17 May 2026 00:56:35 GMT
+      access-control-allow-headers:
+      - X-Requested-With, Accept, Accept-Encoding, Accept-Charset, Accept-Language,
+        Accept-Ranges, Cache-Control
+      access-control-allow-origin:
+      - '*'
+      access-control-expose-headers:
+      - Link
+      content-encoding:
+      - gzip
+      permissions-policy:
+      - interest-cohort=()
+      server:
+      - Jetty(9.4.40.v20210413)
+      vary:
+      - Accept-Encoding
+      x-api-pool:
+      - polite
+      x-concurrency-limit:
+      - '3'
+      x-rate-limit-interval:
+      - 1s
+      x-rate-limit-limit:
+      - '10'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Host:
+      - api.crossref.org
+      User-Agent:
+      - ManuscriptRefLister/1.0 (mailto:roger.dupont@gmail.com)
+    method: GET
+    uri: https://api.crossref.org/journals?query=The+Journal+of+Geology&rows=200&mailto=roger.dupont%40gmail.com
+  response:
+    body:
+      string: !!binary |
+        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
+        gd3bz/GBnW3gA1dPT/8DNCz0DjdEAAA=
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '2588'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 17 May 2026 00:56:36 GMT
+      access-control-allow-headers:
+      - X-Requested-With, Accept, Accept-Encoding, Accept-Charset, Accept-Language,
+        Accept-Ranges, Cache-Control
+      access-control-allow-origin:
+      - '*'
+      access-control-expose-headers:
+      - Link
+      content-encoding:
+      - gzip
+      permissions-policy:
+      - interest-cohort=()
+      server:
+      - Jetty(9.4.40.v20210413)
+      vary:
+      - Accept-Encoding
+      x-api-pool:
+      - polite
+      x-concurrency-limit:
+      - '3'
+      x-rate-limit-interval:
+      - 1s
+      x-rate-limit-limit:
+      - '10'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Host:
+      - api.crossref.org
+      User-Agent:
+      - ManuscriptRefLister/1.0 (mailto:roger.dupont@gmail.com)
+    method: GET
+    uri: https://api.crossref.org/journals/0022-1376/works?sort=published&order=asc&rows=1&mailto=roger.dupont%40gmail.com
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAA/41UW5PaIBT+Kw7PQUmiMcnrdtrZTm/TdV+qPrAElUogBaLrOPnvPcRorOt09i0B
+        zuE734Ujso662qIc6S0KUMmtpWuO3aHisLbXZoulsO5qa8eNFVrBbjgkQ9LvoPyIVpRxB92OTYCc
+        dlRiw20t/VIYkXQcIOF4CX/zIxKq4K+88GUFdRxX1Phz83lEoigYB/FyGZx2nCg9Gr+OyRiTeEay
+        PMzyaPILrve7MEVZwR3JOM2m00kyicYZQDB8xQ1XjGOma+VQTgJU1S8w0YYb6PisRDuOOwz0avCw
+        EYyu9eAHYLbQWFhb+3tD+GZaOa4cLnRJhWoxd19zQMmMtrakQBaUOiOYaxlaUWk5wLAbbRz2LaCC
+        G5jHSWg8R7MNH3zWtVFUegCfuJZ6fUDLHmWBKyM88luSwjSLg3C5hPYfvj96lGQYkjRZjBKShHHk
+        iTmJ+Pt0AYZKweBeD5dDr7vMkyxIg+Qt8yTDJMUkmUUkj8J8nNwyD4RPMhKShBDiR4ZLmS998NSA
+        Di2f+CJIgV8OV6JcGPlogKXBV+ocCOR5gArx2o8HbXZa1uVZl5KXL62UALGT6d0cS6rWdWtcxBUU
+        S6G2rTOff36BtY1zVb4YLUb7/X7YkWiHNTu5ZMiLejEqtFiMqmK1GL2l/2yZToZa2YozsRJAfL/Z
+        p2mnjefILxdAD60qCRedjISsKIWkBoyK2YazrVBr1HiReKXBvve1DFNI0fStlmHapmg6C0kex3kU
+        3Wo5iWKSTSFunZZMG6iEsPtEnZU9gjYCPH/wnz1j9l2U3bLVNF3c7gxy5fSLfeyVd87+7uJ6/Ce3
+        788RtKcSXKeA8x3HovDmucUJXN6OCvMMtVnfc8Dj09M334X4hyuMp9694SSe4kmUZL4XIFWdP8B2
+        Oypb3NfHO/OcwDdBf6jvcznEJWcO8iNY643L6P+ltHsVsKq7IJ0VWXZvNa4gTVUbkzBAf2p+Uhy8
+        Am9a+4a3KlhODdtgINA/76qWsmmav2NmvW1fBgAA
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '771'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 17 May 2026 00:56:37 GMT
+      access-control-allow-headers:
+      - X-Requested-With, Accept, Accept-Encoding, Accept-Charset, Accept-Language,
+        Accept-Ranges, Cache-Control
+      access-control-allow-origin:
+      - '*'
+      access-control-expose-headers:
+      - Link
+      content-encoding:
+      - gzip
+      permissions-policy:
+      - interest-cohort=()
+      server:
+      - Jetty(9.4.40.v20210413)
+      vary:
+      - Accept-Encoding
+      x-api-pool:
+      - polite
+      x-concurrency-limit:
+      - '3'
+      x-rate-limit-interval:
+      - 1s
+      x-rate-limit-limit:
+      - '10'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Host:
+      - api.crossref.org
+      User-Agent:
+      - ManuscriptRefLister/1.0 (mailto:roger.dupont@gmail.com)
+    method: GET
+    uri: https://api.crossref.org/journals/0022-1376/works?sort=published&order=desc&rows=1&mailto=roger.dupont%40gmail.com
+  response:
+    body:
+      string: !!binary |
+        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
+        AOLHjx//B79T0KVKMwAA
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '4119'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 17 May 2026 00:56:38 GMT
+      access-control-allow-headers:
+      - X-Requested-With, Accept, Accept-Encoding, Accept-Charset, Accept-Language,
+        Accept-Ranges, Cache-Control
+      access-control-allow-origin:
+      - '*'
+      access-control-expose-headers:
+      - Link
+      content-encoding:
+      - gzip
+      permissions-policy:
+      - interest-cohort=()
+      server:
+      - Jetty(9.4.40.v20210413)
+      vary:
+      - Accept-Encoding
+      x-api-pool:
+      - polite
+      x-concurrency-limit:
+      - '3'
+      x-rate-limit-interval:
+      - 1s
+      x-rate-limit-limit:
+      - '10'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Host:
+      - api.crossref.org
+      User-Agent:
+      - ManuscriptRefLister/1.0 (mailto:roger.dupont@gmail.com)
+    method: GET
+    uri: https://api.crossref.org/journals/1537-5269/works?sort=published&order=asc&rows=1&mailto=roger.dupont%40gmail.com
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAA/41UW5PaIBT+Kw7PQUliEpPX7bSznd6m675UfWAJKpVACkTXcfzvPcRorOt09i0B
+        zuE734UDso66xqIC6Q0KUMWtpSuO3b7msLbTZoOlsO5qa8uNFVrBbjgkQ9LvoOKAlpRxB90OxwA5
+        7ajEhttG+qUwIlkSIOF4BX+zAxKq5K+89GUldRzX1Phzs1lEoigYB/FiEZx2nKg8Gr+OyRiTeEry
+        IsyLKPkF1/tdmKKq4Y50PMmzLEmTaJwDBMOX3HDFOGa6UQ4VJEB18wITrbmBjs9KtOO4/UAvBw9r
+        wehKD34AZguNhbWNvzeEb6aV48rhUldUqBZz9zUDlMxoaysKZEGpM4K5lqEllZYDDLvWxmHfAiq4
+        gXmchMYzNF3zwWfdGEWlB/CJa6lXe7ToUZa4NsIjvyUpnORxEC4W0P7D90ePkgxDMknno5SkYRx5
+        Yk4i/j5dgKFSMLjXw+XQ6y7zJA8mQfqWeZJjMsEknUakiMJinN4yD4QnOQlJSgjxI8OlzJc+eGpA
+        h5ZPfBGkxC/7K1EujHw0wNLgK3UOBPI8QIV47ceDNlstm+qsS8Wrl1ZKgNjJ9G6OJVWrpjUu4gqK
+        pVCb1pnPP7/A2tq5upiP5qPdbjfsSLTDhp1cMuRlMx+VWsxHdbmcj97Sf7ZMJ0OjbM2ZWAogvt/s
+        07TVxnPkl0ugh9a1hItORkJWVEJSA0bFbM3ZRqgVOnqReK3Bvve1DCeQouytluGkTVE2DUkRx0UU
+        3WqZRDHJM4hbpyXTBioh7D5RZ2UPoI0Az+/9Z8+YfRdlt2wdj13c7gxy5fSLfeyVd87+7uJ6+Ce3
+        788RtKcSXKeA8y3HovTmucUJXN6OCvMMtVndc8Dj09M334X4hyuMM+/eMIkznERp7nsBUtX5A2y3
+        pbLFfX28M88J/DHoD/V9Loe45MxBfgRrvXEZ/b+Udq8CVk0XpLMii+6txjWkqW5jEgboT8NPioNX
+        4E1r3/BWBcupYWsMBPrnXTVSHo/Hv3K9UKtfBgAA
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '771'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 17 May 2026 00:56:39 GMT
+      access-control-allow-headers:
+      - X-Requested-With, Accept, Accept-Encoding, Accept-Charset, Accept-Language,
+        Accept-Ranges, Cache-Control
+      access-control-allow-origin:
+      - '*'
+      access-control-expose-headers:
+      - Link
+      content-encoding:
+      - gzip
+      permissions-policy:
+      - interest-cohort=()
+      server:
+      - Jetty(9.4.40.v20210413)
+      vary:
+      - Accept-Encoding
+      x-api-pool:
+      - polite
+      x-concurrency-limit:
+      - '3'
+      x-rate-limit-interval:
+      - 1s
+      x-rate-limit-limit:
+      - '10'
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Host:
+      - api.crossref.org
+      User-Agent:
+      - ManuscriptRefLister/1.0 (mailto:roger.dupont@gmail.com)
+    method: GET
+    uri: https://api.crossref.org/journals/1537-5269/works?sort=published&order=desc&rows=1&mailto=roger.dupont%40gmail.com
+  response:
+    body:
+      string: !!binary |
+        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
+        oOVUX8ozzmnJY3xiSHRxSUeqaFS+z9j13k1FiOD6em05GmWSO2DZdwLHNe3QjwYHZ9GoCsKjOgsV
+        WSLE2IGJjnDr7v4RImxixQ4b3AuInnEuuzU7x6GasOcNZjfKIyl8xNHZIdJJV5cTjwpD+uFsqKoA
+        nh4i42femosRb7s7LINrPWP9sju9pbPckyJVee2vdIVLtuYfglqoNv3HnK8+noMH/4F/f2u7YvXv
+        vOi+/XtLJWtqOmgXXDaVmKrz40Nwku5aZ1Srw6Dz1b0VkaY8Ldpk3uXO6lh9TTW1/JdWzJMhz+0p
+        7HmRz0Dnjcs5TUBwEOwqB6UHnGjM1VbM1VbXszzP301I1826Uke59JYrWsoVLcrubMR7/OPY7sAb
+        49GnHaGLCKSTh3j0ITbYaHx2GFOmNxD1qB7o2L5eVXa1Ysz6TildvjzVWemu4vKgYHrYZplOSONR
+        DKHPfVWYQqY68NfRYLKV+wbRywhoF5sA+C/dXfR/fJE8g8e0nfoEXbZF0nWnbst+/HCOd5u06du3
+        b1avodqCM6jb8JZIW5VRIWClt31KpV0xX12M76+aw6lLkchbCZ/eNG6u598XtFRJr1MogZfIX5P+
+        iu+klguZqRhswhkTbOZMLTgVJfztZ/fV6RcE3k9/QeBdOc6+E+7b9q5fELhu4NjdbfU6KSp807Zs
+        ule8uqz+fVJWSKarJX0cq7Khtn786H9WsHshm/v863vN9fZvF1b22/8y4fvgJwpjfjKAMXhG+MTp
+        rrApUzKi4XSh0uGK9dxaM4Q3l5fvSIpN3JG5isgy3w1NhP+YZGG2eW8mML97nqm5b3fvbaibPnnP
+        qtNGzrqTyICoFUGqMpH14p9e9pf+ZylmCe/pUIVNJ3+2ottgmEbVmOrnKuo3CDXwI5mbdEkFonIA
+        xI8fP/4Pfp4YBkozAAA=
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '4118'
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 17 May 2026 00:56:40 GMT
+      access-control-allow-headers:
+      - X-Requested-With, Accept, Accept-Encoding, Accept-Charset, Accept-Language,
+        Accept-Ranges, Cache-Control
+      access-control-allow-origin:
+      - '*'
+      access-control-expose-headers:
+      - Link
+      content-encoding:
+      - gzip
+      permissions-policy:
+      - interest-cohort=()
+      server:
+      - Jetty(9.4.40.v20210413)
+      vary:
+      - Accept-Encoding
+      x-api-pool:
+      - polite
+      x-concurrency-limit:
+      - '3'
+      x-rate-limit-interval:
+      - 1s
+      x-rate-limit-limit:
+      - '10'
+    status:
+      code: 200
+      message: OK
 version: 1

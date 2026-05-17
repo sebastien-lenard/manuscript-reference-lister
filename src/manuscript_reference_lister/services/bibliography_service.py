@@ -36,6 +36,15 @@ class BibliographyService:
             matched_works = works_by_citation.get(key, [])
 
             if not matched_works:
+                logger.error(
+                    "No metadata or DOI found for citation: %s",
+                    citation_str,
+                    extra={
+                        "status": "KO",
+                        "event": "bibliography_missing_reference",
+                        "citation": citation_str,
+                    },
+                )
                 rows.append(
                     {
                         "Citation": citation_str,
@@ -45,11 +54,20 @@ class BibliographyService:
                 )
                 continue
 
-            status = (
-                "Warning: select the right reference"
-                if len(matched_works) > 1
-                else "OK"
-            )
+            if len(matched_works) > 1:
+                logger.error(
+                    "No metadata or DOI found for citation: %s",
+                    citation_str,
+                    extra={
+                        "status": "KO",
+                        "event": "bibliography_missing_reference",
+                        "citation": citation_str,
+                    },
+                )
+                status = "Warning: select the right reference"
+
+            else:
+                status = "OK"
 
             for work in matched_works:
                 rows.append(
@@ -75,5 +93,13 @@ class BibliographyService:
             writer.writerows(rows)
 
         logger.info(
-            f"Generated and saved bibliography with {len(rows)} rows in {output_path}."
+            "Generated and saved bibliography with %d rows to %s",
+            len(rows),
+            output_path,
+            extra={
+                "status": "OK",
+                "event": "bibliography_export_success",
+                "output_filepath": str(output_path),
+                "total_rows": len(rows),
+            },
         )

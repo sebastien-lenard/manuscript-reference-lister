@@ -6,8 +6,10 @@ import traceback
 import click
 
 from .core import run
+from .logging_config import setup_logging
+from .utils.config import get_config
 
-logger = logging.getLogger("manuscript_reference_lister.cli")
+logger = logging.getLogger(__name__)
 
 
 @click.command()
@@ -32,24 +34,21 @@ def main(input_file, text, output_file, verbose):
     CLI entry point.
     Examples:
         # Process a file and specify output
-        $ uv run python -m src.manuscript_reference_lister \
+        $ uv run python -m manuscript_reference_lister \
             --f "C:\\Documents\\manuscript.docx" -o "C:\\Documents\\bibliography.csv"
 
         Output file can be omitted, default generated file is \
             OUTPUT_DIR_PATH / "manuscript_references.csv"
         # Pipe source directly
         $ echo "Voila (Lenard et al., 2020)\r\nJournals\r\nNature Geoscience" | \
-            uv run python -m src.manuscript_reference_lister
+            uv run python -m manuscript_reference_lister
     """
 
-    levels = {0: logging.WARNING, 1: logging.INFO, 2: logging.DEBUG}
-    log_level = levels.get(verbose, logging.DEBUG)
-    logging.basicConfig(
-        level=log_level, format="%(levelname)s [%(name)s]: %(message)s", force=True
-    )
+    log_dir = setup_logging(verbose_level=verbose)
 
     logger.info("Starting manuscript-reference-lister...")
     logger.debug("Current working directory: %s", os.getcwd())
+    logger.debug("Logs are being written to: %s", log_dir)
 
     if not text and not sys.stdin.isatty():
         # Read piped text with literal "\n" and "\r" converted into newline/CR bytes
@@ -57,6 +56,8 @@ def main(input_file, text, output_file, verbose):
         text = text.replace("\r", "")
 
     try:
+        config = get_config()
+        config.ensure_repo_directory()
         run(input_file_path=input_file, input_text=text, output_filepath=output_file)
         click.echo("Done.")
 
@@ -64,6 +65,10 @@ def main(input_file, text, output_file, verbose):
         raise e
 
     except Exception as e:
+        logger.critical(
+            "Fatal application crash encountered during execution", exc_info=True
+        )
+
         click.secho(f"\nError: An unexpected error occurred: {e}", fg="red", err=True)
 
         if verbose > 0:

@@ -11,6 +11,8 @@ from manuscript_reference_lister.utils import AppConfig
 
 from .base_repository import BaseRepository
 
+logger = logging.getLogger(__name__)
+
 
 class WorkRepository(BaseRepository[WorkMetadata]):
     """Handles published work metadata records (for articles, book chapters, etc.)."""
@@ -27,8 +29,7 @@ class WorkRepository(BaseRepository[WorkMetadata]):
         keywords: str = "",
         get_limit: int | None = None,
     ) -> list[WorkMetadata]:
-        """
-        Get work metadata, including dois, from unstructured info combining the
+        """Get work metadata, including dois, from unstructured info combining the
         first_authors of input_citation_metadata and keywords, with results filtered on
         the year of input_citation_metadata and input_ISSN. Number of results is capped
         by get_limit. Works without authors are excluded.
@@ -118,7 +119,6 @@ class WorkRepository(BaseRepository[WorkMetadata]):
         Warning: strict comparison, case insensitive. If name slightly differs (e.g.
         VanDijk vs Van Dijk, comparison returns False)
         """
-
         # 1. Strict count validation if not an "et al." citation
         if (
             input_first_authors_count is not None
@@ -184,11 +184,17 @@ class WorkRepository(BaseRepository[WorkMetadata]):
         ]
 
         self.records.extend(new_entries)
-        logging.info(f"Merged {len(new_entries)} new work record placeholders.")
+        logger.info(
+            "Merged %d new work record placeholders.",
+            len(new_entries),
+            extra={
+                "event": "works_merged",
+                "new_placeholders_count": len(new_entries),
+            },
+        )
 
     def update_all(self, ISSNs: list[str]) -> None:
-        """
-        Attempt to find DOIs for all records currently missing them.
+        """Attempt to find DOIs for all records currently missing them.
         Iterates through provided ISSNs to filter Crossref API results.
         """
         # 1. Identify templates needing info
@@ -196,6 +202,7 @@ class WorkRepository(BaseRepository[WorkMetadata]):
 
         new_rich_records = []
         processed_templates = []
+        failed_count = 0
 
         for record in templates_to_process:
             # Construct the search object expected by get_work_metadata
@@ -218,9 +225,16 @@ class WorkRepository(BaseRepository[WorkMetadata]):
             if found_for_this_record:
                 processed_templates.append(record)
             else:
-                logging.warning(
-                    f"No work found for {citation_info.first_authors_txt},"
-                    f" {citation_info.year_and_suffix}."
+                failed_count += 1
+                logger.warning(
+                    "No work found for %s, %s.",
+                    citation_info.first_authors_txt,
+                    citation_info.year_and_suffix,
+                    extra={
+                        "event": "work_resolution_failed",
+                        "author": citation_info.first_authors_txt,
+                        "year": citation_info.year_and_suffix,
+                    },
                 )
 
         # 2. Swap templates for rich records
@@ -228,7 +242,15 @@ class WorkRepository(BaseRepository[WorkMetadata]):
             self.records.remove(template)
 
         self.records.extend(new_rich_records)
-
         self.deduplicate()
 
-        logging.info(f"Updated {len(new_rich_records)} work records with DOI.")
+        logger.info(
+            "Work resolution completed. Updated: %d, Failed: %d",
+            len(new_rich_records),
+            failed_count,
+            extra={
+                "event": "works_update_completed",
+                "updated_count": len(new_rich_records),
+                "failed_count": failed_count,
+            },
+        )

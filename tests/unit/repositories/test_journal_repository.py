@@ -255,8 +255,10 @@ def test_update_all_priority_and_limit(
     ) as mock_get:
         repo.update_all()
 
-        assert "Journals with missing metadata: 1" in caplog.text
-        assert "Journals with expired metadata: 1" in caplog.text
+        assert (
+            "Journal categorization completed. Missing: 1, Expired: 1, Valid: 1"
+            in caplog.text
+        )
 
         # Ensure 'Missing' was the one updated due to limit=1
         assert mock_get.call_count == 1

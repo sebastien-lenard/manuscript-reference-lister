@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -203,7 +204,7 @@ def test_validate_first_authors_logic(
     )
 
 
-def test_merge_new_works_deduplication(repo: WorkRepository):
+def test_merge_new_works_deduplication(repo: WorkRepository) -> None:
     """Ensure duplicate input citations only create one record."""
     citations = [
         CitationMetadata(first_authors_txt="Lenard et al.", year_and_suffix="2020a"),
@@ -215,7 +216,7 @@ def test_merge_new_works_deduplication(repo: WorkRepository):
     assert repo.records[0].input_first_authors_txt == "Lenard et al."
 
 
-def test_merge_new_works_avoids_duplicate_of_rich_record(repo: WorkRepository):
+def test_merge_new_works_avoids_duplicate_of_rich_record(repo: WorkRepository) -> None:
     """
     Ensure a template is NOT added if a record with the same author/year
     already exists (even if the existing record has a DOI/ISSN).
@@ -241,7 +242,7 @@ def test_merge_new_works_avoids_duplicate_of_rich_record(repo: WorkRepository):
     assert repo.records[0].input_ISSN == "1752-0894"
 
 
-def test_merge_new_works_adds_fresh_template(repo: WorkRepository):
+def test_merge_new_works_adds_fresh_template(repo: WorkRepository) -> None:
     """Ensure a brand new citation is added as a template."""
     repo.records = []
     citations = [
@@ -257,9 +258,12 @@ def test_merge_new_works_adds_fresh_template(repo: WorkRepository):
     assert new_entry.input_ISSN is None
 
 
-def test_update_all_replaces_template_with_rich_record(repo: WorkRepository):
+def test_update_all_replaces_template_with_rich_record(
+    repo: WorkRepository, caplog: pytest.LogCaptureFixture
+) -> None:
     """Verify that a record without a DOI is updated when get_work_metadata returns a
-    result."""
+    result and the structured success log is recorded."""
+    caplog.set_level(logging.INFO)
     template = WorkMetadata(
         input_first_authors_txt="Lenard et al.", input_year_and_suffix="2020a"
     )
@@ -283,6 +287,7 @@ def test_update_all_replaces_template_with_rich_record(repo: WorkRepository):
     ) as mock_get:
         repo.update_all(ISSNs=["1752-0894"])
 
+        assert "Work resolution completed. Updated: 1, Failed: 0" in caplog.text
         # Check that get_work_metadata called for the template but NOT for the existing
         # rich record
         assert mock_get.call_count == 1
@@ -302,9 +307,12 @@ def test_update_all_replaces_template_with_rich_record(repo: WorkRepository):
         assert updated_record.input_ISSN == "1752-0894"
 
 
-def test_update_all_skips_if_no_results_found(repo: WorkRepository):
+def test_update_all_skips_if_no_results_found(
+    repo: WorkRepository, caplog: pytest.LogCaptureFixture
+) -> None:
     """Verify that if get_work_metadata returns nothing, the template remains
     untouched."""
+    caplog.set_level(logging.INFO)
     template = WorkMetadata(
         input_first_authors_txt="Unknown", input_year_and_suffix="2024"
     )
@@ -314,5 +322,7 @@ def test_update_all_skips_if_no_results_found(repo: WorkRepository):
     with patch.object(repo, "get_work_metadata", return_value=[]):
         repo.update_all(ISSNs=["0000-0000"])
 
+        assert "No work found for Unknown, 2024." in caplog.text
+        assert "Work resolution completed. Updated: 0, Failed: 1" in caplog.text
         assert len(repo.records) == 1
         assert repo.records[0].DOI is None  # Still a template

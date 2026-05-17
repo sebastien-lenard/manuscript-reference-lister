@@ -6,6 +6,8 @@ from zipfile import BadZipFile
 from docx import Document
 from docx.opc.exceptions import PackageNotFoundError
 
+logger = logging.getLogger(__name__)
+
 
 class DataLoader:
     """Handles data loading and text extraction for DOCX and JSON files.
@@ -23,7 +25,15 @@ class DataLoader:
             msg = f"Input file not found: {self.file_path}"
             if self.raise_exception:
                 raise FileNotFoundError(msg)
-            logging.warning(msg)
+            logger.warning(
+                "Input file not found: %s",
+                self.file_path,
+                extra={
+                    "status": "KO",
+                    "event": "file_not_found",
+                    "filepath": str(self.file_path),
+                },
+            )
 
     def extract_text_from_docx(self) -> str | None:
         """Parses a .docx file and joins paragraphs with newlines."""
@@ -33,10 +43,17 @@ class DataLoader:
             doc = Document(self.file_path)
             return "\n".join(p.text for p in doc.paragraphs)
         except (PackageNotFoundError, BadZipFile):
-            msg = f"Invalid or corrupted .docx: {self.file_path}"
             if self.raise_exception:
                 raise
-            logging.warning(msg)
+            logger.warning(
+                "Invalid or corrupted .docx: %s",
+                self.file_path,
+                extra={
+                    "status": "KO",
+                    "event": "docx_corruption_detected",
+                    "filepath": str(self.file_path),
+                },
+            )
             return None
 
     def load_json(self, validator=None) -> dict | list | None:
@@ -47,10 +64,17 @@ class DataLoader:
         try:
             data = json.loads(self.file_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            msg = f"Invalid JSON format: {self.file_path}"
             if self.raise_exception:
                 raise
-            logging.warning(msg)
+            logger.warning(
+                "Invalid JSON format: %s",
+                self.file_path,
+                extra={
+                    "status": "KO",
+                    "event": "json_decode_error",
+                    "filepath": str(self.file_path),
+                },
+            )
             return None
 
         if data is None:
@@ -64,7 +88,15 @@ class DataLoader:
                 )
                 if self.raise_exception:
                     raise ValueError(msg)
-                logging.warning(msg)
+                logger.warning(
+                    "Schema validation failed for item in: %s",
+                    self.file_path,
+                    extra={
+                        "status": "KO",
+                        "event": "json_schema_validation_failed",
+                        "filepath": str(self.file_path),
+                    },
+                )
                 return None
 
         return data

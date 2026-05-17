@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 
 from .network import get_http_client_registry
@@ -11,7 +10,7 @@ from .repositories import (
 )
 from .services import BibliographyService, ReferenceService
 from .utils import DataLoader
-from .utils.config import get_config
+from .utils.config import AppConfig, get_config
 
 
 def run(
@@ -19,11 +18,11 @@ def run(
     input_text: str | None,
     style: str = "apa",
     output_filepath: str | Path | None = None,
+    config: AppConfig | None = None,
 ) -> None:
     """Orchestration of the manuscript-reference-lister pipeline."""
 
-    config = get_config()
-    config.ensure_repo_directory()
+    config = config or get_config()
     if not input_text:
         input_text = DataLoader(input_file_path).extract_text_from_docx()
     style_repo = StyleRepository(style)
@@ -41,7 +40,6 @@ def run(
     journal_repo.update_all()
     journal_repo.save_all()
     file_path = journal_repo.config.local_repo_dir_path / journal_repo.local_filename
-    logging.info(f"Saved journal metadata in {file_path}")
 
     citation_parser = CitationParser()
     citations = citation_parser.extract_all(input_text)
@@ -59,6 +57,7 @@ def run(
         target_style=style_repo.favored_style,
     )
     work_repo.save_all()
+    file_path = work_repo.config.local_repo_dir_path / work_repo.local_filename
 
     if not output_filepath:
         config.ensure_output_directory()

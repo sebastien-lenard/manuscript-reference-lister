@@ -12,7 +12,8 @@ def ensure_directories(self) -> None:
 
 
 class AppConfig(BaseSettings):
-    """.Env Configuration loader and validator."""
+    """.Env Configuration loader and validator. Don't load LOG_DIR_PATH, handled by
+    logging_config.py"""
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

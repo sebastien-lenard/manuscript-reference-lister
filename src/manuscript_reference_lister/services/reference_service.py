@@ -1,9 +1,5 @@
-import logging
-
 from manuscript_reference_lister.repositories import DoiRepository
 from manuscript_reference_lister.schemas import WorkMetadata
-
-logger = logging.getLogger(__name__)
 
 
 class ReferenceService:

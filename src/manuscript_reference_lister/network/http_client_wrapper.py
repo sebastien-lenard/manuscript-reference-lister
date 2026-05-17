@@ -43,17 +43,29 @@ class HTTPClientWrapper:
     def _log_retry(self, retry_state):
         """Native Tenacity callback called before waiting new attempt."""
         url = retry_state.args[0] if retry_state.args else "unknown"
-        error = (
-            retry_state.outcome.exception()
-            if retry_state.outcome
-            else "Transient failure"
+        exception = retry_state.outcome.exception() if retry_state.outcome else None
+
+        error_type = type(exception).__name__ if exception else "Transient failure"
+        status_code = (
+            exception.response.status_code
+            if isinstance(exception, httpx.HTTPStatusError)
+            else None
         )
+
         logger.warning(
             "Transient error encountered. Retrying request to %s (Attempt %d). "
             "Error: %s",
             url,
             retry_state.attempt_number,
-            error,
+            error_type,
+            extra={
+                "status": "KO",
+                "event": "http_request_retry",
+                "url": url,
+                "attempt": retry_state.attempt_number,
+                "error_type": error_type,
+                "status_code": status_code,
+            },
         )
 
     def get(
@@ -90,14 +102,45 @@ class HTTPClientWrapper:
         )
 
         try:
-            return retrier(self.client.get, url, params=params, headers=headers)
+            response = retrier(self.client.get, url, params=params, headers=headers)
+            logger.debug(
+                "Successfully fetched URL: %s",
+                url,
+                extra={
+                    "status": "OK",
+                    "event": "http_request_success",
+                    "url": url,
+                    "status_code": response.status_code,
+                },
+            )
+            return response
 
         except httpx.HTTPStatusError as e:
-            logger.error("Fatal or unresolved HTTP Error for URL %s: %s", url, e)
+            logger.error(
+                "Fatal or unresolved HTTP Error for URL %s: %s",
+                url,
+                e,
+                extra={
+                    "status": "KO",
+                    "event": "http_request_fatal_status",
+                    "url": url,
+                    "status_code": e.response.status_code,
+                    "error_type": type(e).__name__,
+                },
+            )
             raise e
+
         except Exception as e:
             logger.error(
-                "Unexpected or unrecoverable error during request to %s: %s", url, e
+                "Unexpected or unrecoverable error during request to %s: %s",
+                url,
+                e,
+                extra={
+                    "status": "KO",
+                    "event": "http_request_unexpected_crash",
+                    "url": url,
+                    "error_type": type(e).__name__,
+                },
             )
             raise e
 

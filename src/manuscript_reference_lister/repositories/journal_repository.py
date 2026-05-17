@@ -8,6 +8,8 @@ from manuscript_reference_lister.utils import AppConfig
 
 from .base_repository import BaseRepository
 
+logger = logging.getLogger(__name__)
+
 
 class JournalRepository(BaseRepository[JournalMetadata]):
     """Handles journal metadata records."""
@@ -28,7 +30,15 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         Warning: If more than 1 exact match is found, returns only the records for the
         first one found.
         """
-        logging.info(f"Retrieving {input_title} metadata...")
+        logger.info(
+            "Retrieving journal %s metadata from Crossref...",
+            input_title,
+            extra={
+                "status": "OK",
+                "event": "crossref_journal_query_start",
+                "input_title": input_title,
+            },
+        )
         # Retrieval of records with titles similar to input_title from Crossref API
         params = {
             "query": input_title,
@@ -50,23 +60,47 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         ]
 
         if not exact_matches:
-            logging.warning("Journal %s not found.", input_title)
+            logger.warning(
+                "Journal %s not found.",
+                input_title,
+                extra={
+                    "status": "KO",
+                    "event": "crossref_journal_not_found",
+                    "input_title": input_title,
+                },
+            )
             return [JournalMetadata(input_title=input_title)]
 
         # Discard exact matches other than the 1st one
         if len(exact_matches) > 1:
-            logging.warning(
-                f"Discarded {len(exact_matches)} duplicate titles in the repo for "
-                f"journal {input_title}."
+            logger.warning(
+                "Discarded %d duplicate titles in the repo for journal: %s",
+                len(exact_matches),
+                input_title,
+                extra={
+                    "status": "WARNING",
+                    "event": "crossref_duplicate_titles_discarded",
+                    "discarded_count": len(exact_matches),
+                    "input_title": input_title,
+                },
             )
         item = exact_matches[0]
         true_title = item.get("title", "")
         publisher = item.get("publisher", "")
-        issns = item.get("ISSN", [])
         issns = list(dict.fromkeys(item.get("ISSN", [])))  # remove duplicate ISSNs
 
         for issn in issns:
-            logging.info(f"Retrieving {input_title} / {issn} publication range...")
+            logger.info(
+                "Retrieving %s / %s publication range...",
+                input_title,
+                issn,
+                extra={
+                    "status": "OK",
+                    "event": "crossref_issn_range_query_start",
+                    "input_title": input_title,
+                    "issn": issn,
+                },
+            )
             # Publication range
             dates = {
                 "min_year": self.get_issn_year_endpoint(issn, "asc"),
@@ -75,7 +109,17 @@ class JournalRepository(BaseRepository[JournalMetadata]):
 
             # Discard records without published work
             if not dates["min_year"] or not dates["max_year"]:
-                logging.warning("Skip journal %s (no published work).", input_title)
+                logger.warning(
+                    "Skipping journal %s / %s (no published work found)",
+                    input_title,
+                    issn,
+                    extra={
+                        "status": "WARNING",
+                        "event": "crossref_journal_skipped_no_works",
+                        "input_title": input_title,
+                        "issn": issn,
+                    },
+                )
                 continue
 
             journal_records.append(
@@ -127,9 +171,14 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         regular local saving of the updates."""
 
         expiration_date = date.today() - timedelta(days=self.config.journal_update_days)
-        logging.info(
-            f"Updating journals without metadata or metadata older than "
-            f"{str(expiration_date)}..."
+        logger.info(
+            "Updating journals without metadata or metadata older than: %s",
+            expiration_date,
+            extra={
+                "status": "OK",
+                "event": "journal_update_process_started",
+                "expiration_threshold": str(expiration_date),
+            },
         )
         missing_metadata: list[JournalMetadata] = []
         expired_metadata: list[JournalMetadata] = []
@@ -146,8 +195,20 @@ class JournalRepository(BaseRepository[JournalMetadata]):
             else:
                 valid_metadata.append(record)
 
-        logging.info(f"Journals with missing metadata: {len(missing_metadata)}")
-        logging.info(f"Journals with expired metadata: {len(expired_metadata)}")
+        logger.info(
+            "Journal categorization completed. Missing: %d, Expired: %d, Valid: %d",
+            len(missing_metadata),
+            len(expired_metadata),
+            len(valid_metadata),
+            extra={
+                "status": "OK",
+                "event": "journal_update_categorization",
+                "missing_count": len(missing_metadata),
+                "expired_count": len(expired_metadata),
+                "valid_count": len(valid_metadata),
+            },
+        )
+
         records_to_update = missing_metadata + expired_metadata
 
         update_count = 0
@@ -171,21 +232,43 @@ class JournalRepository(BaseRepository[JournalMetadata]):
             # Display update every 10 seconds
             if time.time() - last_display_time > 10:
                 remaining = update_total - (i + 1)
-                logging.info(
-                    f"Status: {remaining} updates remaining out of {update_total}..."
+                logger.info(
+                    "Batch update status: %d updates remaining out of %d",
+                    remaining,
+                    update_total,
+                    extra={
+                        "status": "OK",
+                        "event": "journal_update_heartbeat",
+                        "remaining_count": remaining,
+                        "total_count": update_total,
+                    },
                 )
                 last_display_time = time.time()
 
         # 3. Handle Warning and Flag
         if update_remaining > 0:
             self.has_pending_updates = True
-            logging.warning(
+            logger.warning(
                 "Journal update limit reached. %d records still need updating.",
                 update_remaining,
+                extra={
+                    "status": "WARNING",
+                    "event": "journal_update_limit_reached",
+                    "remaining_count": update_remaining,
+                    "limit_configured": self.config.journal_update_limit,
+                },
             )
 
         self.records = valid_metadata
-        logging.info(f"Updated {len(valid_metadata)} journals.")
+        logger.info(
+            "Journal metadata sync finalized. Updated %d journals",
+            len(valid_metadata),
+            extra={
+                "status": "OK",
+                "event": "journal_update_completed",
+                "total_records": len(valid_metadata),
+            },
+        )
 
     def merge_new_titles(self, input_titles: list[str]) -> None:
         """Merge new titles into the existing records as empty templates.
@@ -201,4 +284,12 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         ]
 
         self.records.extend(new_entries)
-        logging.info(f"Merged {len(new_entries)} new journal records.")
+        logger.info(
+            "Merged %d new journal records into the local repository list",
+            len(new_entries),
+            extra={
+                "status": "OK",
+                "event": "journal_records_merged",
+                "new_entries_count": len(new_entries),
+            },
+        )

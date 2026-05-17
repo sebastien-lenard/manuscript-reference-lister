@@ -1,12 +1,14 @@
 import logging
 
-import requests
+import httpx
 
 from manuscript_reference_lister.network import (
     HTTPClientWrapper,
     get_http_client_registry,
 )
 from manuscript_reference_lister.utils import AppConfig, get_config
+
+logger = logging.getLogger(__name__)
 
 
 class DoiRepository:
@@ -34,9 +36,29 @@ class DoiRepository:
                 self.config.doi_api_url.replace("{doi}", str(doi)), headers=headers
             )  # DOI Content Negotiation Service
             res.encoding = "utf-8"
-            return res.text.strip()
-        except requests.exceptions.HTTPError as e:
+            reference_text = res.text.strip()
+            logger.debug(
+                "Successfully resolved bibliographic reference for DOI: %s",
+                doi,
+                extra={
+                    "status": "OK",
+                    "event": "doi_resolution_success",
+                    "doi": doi,
+                    "style": style,
+                },
+            )
+            return reference_text
+        except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
-                logging.warning("DOI not found (404): %s", doi)
+                logger.warning(
+                    "DOI not found (404) via content negotiation: %s",
+                    doi,
+                    extra={
+                        "status": "KO",
+                        "event": "doi_not_found",
+                        "doi": doi,
+                        "status_code": 404,
+                    },
+                )
                 return "Reference unavailable in doi.org."
             raise e

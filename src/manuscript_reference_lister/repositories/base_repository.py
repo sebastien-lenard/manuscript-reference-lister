@@ -73,18 +73,42 @@ class BaseRepository[T: BaseSchema]:
                 self._load_failed = False
             except (TypeError, ValueError) as e:
                 logger.warning(
-                    f"Failed validation for {self.model_class.__name__} in file {path}."
-                    f" Records set to [] for this run. Please check the file before a"
-                    f" rerun."
+                    "Failed validation for %s in file %s. Records set to [] for this "
+                    "run. Please check the file before a rerun.",
+                    self.model_class.__name__,
+                    path,
+                    extra={
+                        "status": "KO",
+                        "event": "repository_validation_failed",
+                        "model": self.model_class.__name__,
+                        "filepath": str(path),
+                    },
                 )
                 if raise_exception:
                     raise e
-                logger.debug(f"Error detail: {e}")
+                logger.debug(
+                    "Validation error detail: %s",
+                    e,
+                    extra={
+                        "status": "KO",
+                        "event": "repository_validation_error_detail",
+                    },
+                )
                 self.records = []
                 self._load_failed = True
         else:
             self.records = []
-        logging.info(f"Loaded {len(self.records)} records from {str(path)}")
+        logger.info(
+            "Loaded %d records into memory from %s",
+            len(self.records),
+            path,
+            extra={
+                "status": "OK",
+                "event": "repository_load_success",
+                "record_count": len(self.records),
+                "filepath": str(path),
+            },
+        )
 
     def save_all(self, output_filepath: str | Path | None = None) -> None:
         """Saves records atomically using a temporary file.
@@ -103,7 +127,13 @@ class BaseRepository[T: BaseSchema]:
             self.local_filename = new_filename
             self._load_failed = False
             logger.warning(
-                f"Previous load failed; diverting to recovery file: {target_path}"
+                "Previous load failed; diverting save to recovery file: %s",
+                target_path,
+                extra={
+                    "status": "WARNING",
+                    "event": "repository_save_diverted_to_recovery",
+                    "recovery_filepath": str(target_path),
+                },
             )
 
         data_to_save = [record.model_dump() for record in self.records]
@@ -117,4 +147,14 @@ class BaseRepository[T: BaseSchema]:
         finally:
             if temp_path.exists():
                 temp_path.unlink()
-        logging.info(f"Saved {len(self.records)} records from {str(target_path)}")
+        logger.info(
+            "Saved %d records to %s",
+            len(self.records),
+            target_path,
+            extra={
+                "status": "OK",
+                "event": "repository_save_success",
+                "record_count": len(self.records),
+                "filepath": str(target_path),
+            },
+        )

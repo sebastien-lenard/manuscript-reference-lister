@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-import requests
 
 from manuscript_reference_lister.repositories import DoiRepository
 
@@ -35,10 +35,14 @@ def test_get_reference_success(repo: DoiRepository) -> None:
 
 def test_get_reference_not_found(repo: DoiRepository) -> None:
     """Verify fallback string is returned when a 404 error occurs."""
+    mock_request = httpx.Request("GET", "https://doi.org/invalid/doi")
+    mock_response = httpx.Response(status_code=404, request=mock_request)
 
-    mock_response = MagicMock(status_code=404)
-    error = requests.exceptions.HTTPError("404 Client Error", response=mock_response)
-
+    error = httpx.HTTPStatusError(
+        message="Client Error: 404 Not Found",
+        request=mock_request,
+        response=mock_response,
+    )
     with patch.object(repo.http_client_wrapper, "get", side_effect=error):
         result = repo.get_reference("invalid/doi", "apa")
         assert result == "Reference unavailable in doi.org."

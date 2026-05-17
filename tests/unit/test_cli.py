@@ -12,6 +12,17 @@ def runner() -> CliRunner:
     return CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def mock_setup_logging():
+    """Autouse fixture to prevent the CLI from restructuring the global logging
+    handlers and breaking pytest's caplog during global test suite runs.
+    """
+
+    with patch("manuscript_reference_lister.cli.setup_logging") as mock:
+        mock.return_value = "/mock/log/dir"
+        yield mock
+
+
 def test_cli_success(runner: CliRunner) -> None:
     """Verify that the CLI exits with 0 on successful execution."""
     with patch("manuscript_reference_lister.cli.run") as mock_run:
