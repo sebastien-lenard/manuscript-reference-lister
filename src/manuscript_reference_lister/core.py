@@ -31,18 +31,16 @@ def run(
         raise ValueError("Style {style} is not found in crossref api styles.")
 
     journal_parser = JournalParser()
-
     journal_required_titles = journal_parser.extract_all(input_text)
+    citation_parser = CitationParser()
+    citations = citation_parser.extract_all(input_text)
+
     journal_repo = JournalRepository()
     journal_repo.load_all()
     journal_repo.deduplicate()
     journal_repo.merge_new_titles(journal_required_titles)
     journal_repo.update_all()
     journal_repo.save_all()
-    file_path = journal_repo.config.local_repo_dir_path / journal_repo.local_filename
-
-    citation_parser = CitationParser()
-    citations = citation_parser.extract_all(input_text)
 
     work_repo = WorkRepository()
     work_repo.load_all()
@@ -57,7 +55,6 @@ def run(
         target_style=style_repo.favored_style,
     )
     work_repo.save_all()
-    file_path = work_repo.config.local_repo_dir_path / work_repo.local_filename
 
     if not output_filepath:
         config.ensure_output_directory()
