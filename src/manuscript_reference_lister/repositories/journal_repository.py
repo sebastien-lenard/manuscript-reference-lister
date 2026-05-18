@@ -22,13 +22,48 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         super().__init__(local_filename, model_class=JournalMetadata, config=config)
         self.has_pending_updates = False
 
+    def _log_heartbeat_if_needed(
+        self, processed: int, total: int, last_time: float
+    ) -> float:
+        """Helper to log heartbeat every 10 seconds."""
+        current_time = time.time()
+        if current_time - last_time > 10:
+            remaining = total - processed
+            logger.info(
+                "Batch update status: %d updates remaining out of %d",
+                remaining,
+                total,
+                extra={
+                    "status": "OK",
+                    "event": "journal_update_heartbeat",
+                    "remaining_count": remaining,
+                    "total_count": total,
+                },
+            )
+            return current_time
+        return last_time
+
+    def _normalize_title(self, title: str) -> str:
+        """Normalize title for fuzzy matching (case, plurals, and delimiters)."""
+        if not title:
+            return ""
+        t = title.strip().lower()
+        t = t.replace("-", " ").replace(":", " ")
+        words = [w[:-1] if w.endswith("s") else w for w in t.split()]
+        return " ".join(words)
+
     def get_journal_metadata(self, input_title: str) -> list[JournalMetadata]:
         """
         Get journal metadata filtered on the exact match of the title (input_title) that
         have published works. A title can correspond to several records or none, each of
         them identified by a unique ISSN.
-        Warning: If more than 1 exact match is found, returns only the records for the
-        first one found.
+        - Case exact match: Returns a list of complete JournalMetadata corresponding to
+            the first exact title found (one by distinct ISSN).
+        - Case no exact match but similar titles found: Returns a list of one incomplete
+            JournalMetadata only, enriched with the list similar_titles.
+        - Case no exact match: Returns a list of one incomplete JournalMetadata only.
+        TODO: The case when an exact match is found without an ISSN is not correctly
+            handled (returns an empty list).
         """
         logger.info(
             "Retrieving journal %s metadata from Crossref...",
@@ -60,16 +95,44 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         ]
 
         if not exact_matches:
-            logger.warning(
-                "Journal %s not found.",
-                input_title,
-                extra={
-                    "status": "KO",
-                    "event": "crossref_journal_not_found",
-                    "input_title": input_title,
-                },
-            )
-            return [JournalMetadata(input_title=input_title)]
+            # Look for potential matches based on flexible business rules
+            target_norm = self._normalize_title(input_title)
+            similar_titles = []
+            for item in items:
+                raw_title = item.get("title", "").strip()
+                if raw_title and self._normalize_title(raw_title) == target_norm:
+                    similar_titles.append(raw_title)
+
+            if similar_titles:
+                # Deduplicate titles keeping order
+                similar_titles = list(dict.fromkeys(similar_titles))
+                logger.warning(
+                    "Journal %s not found. Please check similar titles found: %s",
+                    input_title,
+                    ", ".join(similar_titles),
+                    extra={
+                        "status": "WARNING",
+                        "event": "crossref_journal_similar_found",
+                        "input_title": input_title,
+                        "similar_titles": similar_titles,
+                    },
+                )
+                return [
+                    JournalMetadata(
+                        input_title=input_title, similar_titles=similar_titles
+                    )
+                ]
+            else:
+                logger.warning(
+                    "Journal %s not found.",
+                    input_title,
+                    extra={
+                        "status": "KO",
+                        "event": "crossref_journal_not_found",
+                        "input_title": input_title,
+                    },
+                )
+                return [JournalMetadata(input_title=input_title)]
 
         # Discard exact matches other than the 1st one
         if len(exact_matches) > 1:
@@ -164,6 +227,30 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         years = [y for y in [p_date, o_date] if y is not None]
         return min(years) if order == "asc" and years else max(years) if years else None
 
+    def get_sync_status(self) -> dict[str, int | bool]:
+        """Analyze the current state of records to determine sync problems.
+
+        Returns a status dictionary useful for control flow in core.py.
+        """
+        expiration_date = date.today() - timedelta(days=self.config.journal_update_days)
+        missing_count = 0
+        expired_count = 0
+
+        for record in self.records:
+            if not record.is_complete:
+                missing_count += 1
+            else:
+                last_update = datetime.strptime(record.update, "%Y-%m-%d").date()
+                if last_update < expiration_date:
+                    expired_count += 1
+
+        return {
+            "is_fully_synchronized": missing_count == 0 and expired_count == 0,
+            "missing_metadata_count": missing_count,
+            "expired_metadata_count": expired_count,
+            "has_pending_updates": self.has_pending_updates,
+        }
+
     def update_all(self) -> None:
         """Update the records missing metadata (Priority 1) and records with expired
         metadata (Priority 2) with up-to-date metatata from the remote repo.
@@ -187,8 +274,7 @@ class JournalRepository(BaseRepository[JournalMetadata]):
         for record in self.records:
             last_update = datetime.strptime(record.update, "%Y-%m-%d").date()
 
-            has_missing_data = any(v is None for v in record.model_dump().values())
-            if has_missing_data:
+            if not record.is_complete:
                 missing_metadata.append(record)
             elif last_update < expiration_date:
                 expired_metadata.append(record)
@@ -209,64 +295,82 @@ class JournalRepository(BaseRepository[JournalMetadata]):
             },
         )
 
-        records_to_update = missing_metadata + expired_metadata
-
         update_count = 0
         last_display_time = time.time()
-        update_total = len(records_to_update)
-        update_remaining = 0
 
-        for i, record in enumerate(records_to_update):
+        total_initial_targets = len(missing_metadata) + len(expired_metadata)
+        processed_so_far = 0
+
+        # Temporary collection for the new state of our repository records
+        new_records: list[JournalMetadata] = []
+        new_records.extend(valid_metadata)
+
+        # Process Missing Metadata (Priority 1)
+        for record in missing_metadata:
             if update_count < self.config.journal_update_limit:
                 new_data = self.get_journal_metadata(record.input_title)
                 if new_data:
-                    valid_metadata.extend(new_data)
+                    new_records.extend(new_data)
                 else:
-                    valid_metadata.append(record)
+                    # TODO: empty list returned by get_journal_metadata when no issn
+                    # found for title exact match
+                    new_records.append(record)
                 update_count += 1
             else:
-                # We hit the limit; keep the old record and count it for the warning
-                valid_metadata.append(record)
-                update_remaining = len(records_to_update) - i
-                break
-            # Display update every 10 seconds
-            if time.time() - last_display_time > 10:
-                remaining = update_total - (i + 1)
-                logger.info(
-                    "Batch update status: %d updates remaining out of %d",
-                    remaining,
-                    update_total,
-                    extra={
-                        "status": "OK",
-                        "event": "journal_update_heartbeat",
-                        "remaining_count": remaining,
-                        "total_count": update_total,
-                    },
-                )
-                last_display_time = time.time()
+                new_records.append(record)
 
-        # 3. Handle Warning and Flag
-        if update_remaining > 0:
-            self.has_pending_updates = True
+            processed_so_far += 1
+            last_display_time = self._log_heartbeat_if_needed(
+                processed_so_far, total_initial_targets, last_display_time
+            )
+
+        # Process Expired Metadata (Priority 2)
+        for record in expired_metadata:
+            if update_count < self.config.journal_update_limit:
+                new_data = self.get_journal_metadata(record.input_title)
+                if new_data:
+                    new_records.extend(new_data)
+                else:
+                    new_records.append(record)
+                update_count += 1
+            else:
+                new_records.append(record)
+
+            processed_so_far += 1
+            last_display_time = self._log_heartbeat_if_needed(
+                processed_so_far, total_initial_targets, last_display_time
+            )
+
+        # Compute if any record that required update got skipped due to limit
+        skipped_count = total_initial_targets - update_count
+        self.has_pending_updates = skipped_count > 0
+
+        if self.has_pending_updates:
             logger.warning(
-                "Journal update limit reached. %d records still need updating.",
-                update_remaining,
+                "Journal update limit reached. %d records still need updating or "
+                "refreshing.",
+                skipped_count,
                 extra={
                     "status": "WARNING",
                     "event": "journal_update_limit_reached",
-                    "remaining_count": update_remaining,
+                    "remaining_count": skipped_count,
                     "limit_configured": self.config.journal_update_limit,
                 },
             )
 
-        self.records = valid_metadata
+        # Sort records: 1. Core metadata complete first, then incomplete.
+        # 2. Alphabetical by input_title
+        new_records.sort(key=lambda r: (not r.is_complete, r.input_title.lower()))
+
+        self.records = new_records
+
         logger.info(
             "Journal metadata sync finalized. Updated %d journals",
-            len(valid_metadata),
+            len(self.records),
             extra={
                 "status": "OK",
                 "event": "journal_update_completed",
-                "total_records": len(valid_metadata),
+                "total_records": len(self.records),
             },
         )
 

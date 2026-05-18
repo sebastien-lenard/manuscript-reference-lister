@@ -7,12 +7,15 @@ import pytest
 
 from manuscript_reference_lister.repositories import JournalRepository
 from manuscript_reference_lister.schemas import JournalMetadata
+from manuscript_reference_lister.utils import get_config
 
 
 @pytest.fixture
-def repo() -> JournalRepository:
-    """Provides a fresh instance of JournalRepository for each test."""
-    return JournalRepository()
+def repo(tmp_path) -> JournalRepository:
+    """Provides a fresh, fully isolated instance of JournalRepository for each test."""
+    prod_config = get_config()
+    test_config = prod_config.model_copy(update={"local_repo_dir_path": tmp_path})
+    return JournalRepository(config=test_config)
 
 
 def test_get_journal_metadata_success(repo: JournalRepository) -> None:
@@ -50,7 +53,8 @@ def test_get_journal_metadata_success(repo: JournalRepository) -> None:
 def test_get_journal_metadata_not_found_behavior(
     repo: JournalRepository, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Verify fallback to template and warning log when no journal is found."""
+    """Verify fallback to template and warning log when absolutely no matching journal
+    or similar titles are found.."""
     mock_resp = MagicMock(status_code=200)
     mock_resp.json.return_value = {"message": {"items": []}}
 
@@ -59,9 +63,45 @@ def test_get_journal_metadata_not_found_behavior(
             results = repo.get_journal_metadata("Unknown Journal")
 
             assert "Journal Unknown Journal not found." in caplog.text
+            assert "similar titles found" not in caplog.text
             assert len(results) == 1
             assert results[0].ISSN is None
+            assert results[0].similar_titles is None
             assert results[0].input_title == "Unknown Journal"
+
+
+def test_get_journal_metadata_similar_matches_found(
+    repo: JournalRepository, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Verify normalization rules detect potential matches, filter duplicates, and "
+    "set similar_titles."""
+    mock_resp = MagicMock(status_code=200)
+    mock_resp.json.return_value = {
+        "message": {
+            "items": [
+                {"title": "Nature Geoscience"},  # Case and delimiter mismatch
+                {"title": "Nature-Geosciences"},  # Plural and hyphen mismatch
+                {"title": "Nature Geoscience"},  # Duplicate entry
+                {"title": "Science Journal"},  # Out of scope completely
+            ]
+        }
+    }
+
+    with patch.object(repo.http_client_wrapper, "get", return_value=mock_resp):
+        with caplog.at_level(logging.WARNING):
+            results = repo.get_journal_metadata("nature geoscience")
+
+            assert (
+                "Journal nature geoscience not found. Please check similar titles "
+                "found: Nature Geoscience, Nature-Geosciences" in caplog.text
+            )
+            assert len(results) == 1
+            assert results[0].ISSN is None
+            assert results[0].input_title == "nature geoscience"
+            assert results[0].similar_titles == [
+                "Nature Geoscience",
+                "Nature-Geosciences",
+            ]
 
 
 @pytest.mark.parametrize(
@@ -176,6 +216,83 @@ def test_get_journal_metadata_multiple_issns(repo: JournalRepository) -> None:
         assert mock_get.call_count == 5
 
 
+def test_get_sync_status_isolated(repo: JournalRepository) -> None:
+    """Verify get_sync_status accurately categorizes different records state without
+    running update_all."""
+    repo.config = repo.config.model_copy(update={"journal_update_days": 30})
+    today = date.today()
+    old_date = str(today - timedelta(days=45))  # Expired threshold
+    recent_date = str(today - timedelta(days=5))  # Valid threshold
+
+    repo.records = [
+        # Valid
+        JournalMetadata(
+            input_title="Valid J",
+            true_title="T",
+            publisher="P",
+            ISSN="1-1",
+            start_year=2000,
+            end_year=2026,
+            update=recent_date,
+        ),
+        # Expired
+        JournalMetadata(
+            input_title="Expired J",
+            true_title="T",
+            publisher="P",
+            ISSN="2-2",
+            start_year=2000,
+            end_year=2026,
+            update=old_date,
+        ),
+        # Missing (Incomplete)
+        JournalMetadata(
+            input_title="Missing J",
+            true_title=None,
+            publisher=None,
+            ISSN=None,
+            start_year=None,
+            end_year=None,
+            update=recent_date,
+        ),
+    ]
+
+    repo.has_pending_updates = True
+
+    status = repo.get_sync_status()
+
+    assert status["is_fully_synchronized"] is False
+    assert status["missing_metadata_count"] == 1
+    assert status["expired_metadata_count"] == 1
+    assert status["has_pending_updates"] is True
+
+
+def test_get_sync_status_fully_synchronized(repo: JournalRepository) -> None:
+    """Verify status report when all elements are complete and up to date."""
+    repo.config = repo.config.model_copy(update={"journal_update_days": 30})
+    recent_date = str(date.today() - timedelta(days=5))
+
+    repo.records = [
+        JournalMetadata(
+            input_title="Valid J",
+            true_title="T",
+            publisher="P",
+            ISSN="1-1",
+            start_year=2000,
+            end_year=2026,
+            update=recent_date,
+        )
+    ]
+    repo.has_pending_updates = False
+
+    status = repo.get_sync_status()
+
+    assert status["is_fully_synchronized"] is True
+    assert status["missing_metadata_count"] == 0
+    assert status["expired_metadata_count"] == 0
+    assert status["has_pending_updates"] is False
+
+
 def test_merge_new_titles(repo: JournalRepository) -> None:
     """Verify that new titles are deduplicated and merged as templates without
     affecting existing data."""
@@ -219,11 +336,11 @@ def test_update_all_priority_and_limit(
         # This one is MISSING (ISSN is None)
         JournalMetadata(
             input_title="Missing",
-            true_title="Missing Journal",
-            publisher="Pub",
+            true_title=None,
+            publisher=None,
             ISSN=None,
-            start_year=2000,
-            end_year=2024,
+            start_year=None,
+            end_year=None,
             update=recent_date,
         ),
         # This one is VALID (all fields filled, date is recent)
@@ -264,11 +381,90 @@ def test_update_all_priority_and_limit(
         assert mock_get.call_count == 1
         mock_get.assert_called_with("Missing")
         assert repo.has_pending_updates is True
-        assert any(
-            isinstance(j, JournalMetadata) and j.ISSN == "1111-2222"
-            for j in repo.records
-        )
-        # Verify 'Recent' was moved to valid_metadata untouched
-        assert any(
-            j.input_title == "Recent" and j.ISSN == "9012-3456" for j in repo.records
-        )
+
+        # All records are now complete ("Missing" was updated by the API, "Old" and
+        # "Recent" already had data)
+        # They are all sorted alphabetically by input_title: "Missing" (M) ->
+        # "Old" (O) -> "Recent" (R)
+        assert repo.records[0].input_title == "Missing"
+        assert (
+            repo.records[0].ISSN == "1111-2222"
+        )  # Verifies the API update took effect
+
+        assert repo.records[1].input_title == "Old"
+
+        assert repo.records[2].input_title == "Recent"
+
+        # Test the design pattern: fetch status through the inspector method
+        status = repo.get_sync_status()
+        assert status["is_fully_synchronized"] is False
+        assert status["missing_metadata_count"] == 0
+        assert status["expired_metadata_count"] == 1
+        assert status["has_pending_updates"] is True
+
+
+def test_update_all_sorting_logic_strict(repo: JournalRepository) -> None:
+    """Verify that records are strictly partitioned (complete first, then incomplete)
+    and that each subgroup is sorted alphabetically by input_title.
+    """
+    repo.config = repo.config.model_copy(
+        update={"journal_update_limit": 0, "journal_update_days": 30}
+    )
+    today = date.today()
+    recent_date = str(today - timedelta(days=5))
+
+    repo.records = [
+        # INCOMPLETE (Missing fields) - Title starts with 'A'
+        JournalMetadata(
+            input_title="Alpha Missing",
+            true_title=None,
+            publisher=None,
+            ISSN=None,
+            start_year=None,
+            end_year=None,
+            update=recent_date,
+        ),
+        # COMPLETE - Title starts with 'Z'
+        JournalMetadata(
+            input_title="Zulu Complete",
+            true_title="Zulu Journal",
+            publisher="Pub",
+            ISSN="9999-9999",
+            start_year=2020,
+            end_year=2026,
+            update=recent_date,
+        ),
+        # INCOMPLETE (Missing fields) - Title starts with 'M'
+        JournalMetadata(
+            input_title="Mike Missing",
+            true_title=None,
+            publisher=None,
+            ISSN=None,
+            start_year=None,
+            end_year=None,
+            update=recent_date,
+        ),
+        # COMPLETE - Title starts with 'B'
+        JournalMetadata(
+            input_title="Bravo Complete",
+            true_title="Bravo Journal",
+            publisher="Pub",
+            ISSN="1111-1111",
+            start_year=2010,
+            end_year=2026,
+            update=recent_date,
+        ),
+    ]
+
+    # update_limit=0 forces the repository to keep records untouched but still
+    # categorizes and sorts them
+    with patch.object(JournalRepository, "get_journal_metadata", return_value=None):
+        repo.update_all()
+
+    # Expected order:
+    # Group 1 (Complete): "Bravo Complete" -> "Zulu Complete"
+    # Group 2 (Incomplete): "Alpha Missing" -> "Mike Missing"
+    assert repo.records[0].input_title == "Bravo Complete"
+    assert repo.records[1].input_title == "Zulu Complete"
+    assert repo.records[2].input_title == "Alpha Missing"
+    assert repo.records[3].input_title == "Mike Missing"

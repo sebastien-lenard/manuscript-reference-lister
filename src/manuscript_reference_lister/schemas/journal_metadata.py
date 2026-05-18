@@ -15,6 +15,9 @@ class JournalMetadata(BaseSchema):
     ISSN: str | None = None  # e.g. 1752-0894
     start_year: int | None = Field(default=None, ge=1600, le=2099)  # e.g. 2008
     end_year: int | None = Field(default=None, ge=1600, le=2099)  # e.g. 2026
+    similar_titles: list[str] | None = (
+        None  # Titles in the remote repository (crossref) similar to input_title
+    )
     update: str = Field(
         default_factory=lambda: str(date.today())
     )  # ISO format: YYYY-MM-DD
@@ -23,6 +26,19 @@ class JournalMetadata(BaseSchema):
     def identity_key(self) -> tuple[str, str | None]:
         """Returns the unique identifier used for deduplication."""
         return (self.input_title, self.ISSN)
+
+    @property
+    def is_complete(self) -> bool:
+        """Checks if all core metadata fields are populated.
+        Excludes 'similar_titles' and 'update'.
+        """
+        excluded_fields = {"similar_titles", "update"}
+
+        return all(
+            getattr(self, field_name) is not None
+            for field_name in self.__class__.model_fields
+            if field_name not in excluded_fields
+        )
 
     @field_validator("ISSN")
     @classmethod

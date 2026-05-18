@@ -10,6 +10,7 @@ def test_journal_metadata_defaults():
     """Ensure optional fields default to None and date is today."""
     journal = JournalMetadata(input_title="Science")
     assert journal.ISSN is None
+    assert journal.similar_titles is None
     assert journal.update == str(date.today())
 
 
@@ -65,3 +66,30 @@ def test_journal_metadata_extra_fields_ignored():
     journal = JournalMetadata(**data)
     assert journal.input_title == "Nature"
     assert not hasattr(journal, "extra_api_garbage")
+
+
+def test_journal_metadata_completeness_logic():
+    """Verify that is_complete detects missing core metadata correctly."""
+    incomplete_journal = JournalMetadata(input_title="Nature")
+    assert incomplete_journal.is_complete is False
+
+    complete_journal = JournalMetadata(
+        input_title="Nature Geoscience",
+        true_title="Nature Geoscience",
+        publisher="Nature Portfolio",
+        ISSN="1752-0894",
+        start_year=2008,
+        end_year=2026,
+    )
+    assert complete_journal.is_complete
+
+    complete_with_suggestions = JournalMetadata(
+        input_title="Nature Geo",
+        true_title="Nature Geoscience",
+        publisher="Nature Portfolio",
+        ISSN="1752-0894",
+        start_year=2008,
+        end_year=2026,
+        similar_titles=["Nature Geoscience", "Nature Geography"],
+    )
+    assert complete_with_suggestions.is_complete
