@@ -83,7 +83,14 @@ class AppConfig(BaseSettings):
         self.output_dir_path.mkdir(parents=True, exist_ok=True)
 
 
+def create_config() -> AppConfig:
+    """Factory to always create a fresh configuration instance (perfect for tests)."""
+    return AppConfig()
+
+
 @lru_cache(maxsize=1)
 def get_config() -> AppConfig:
-    """Gets current cached config or load it with validation."""
-    return AppConfig()
+    """Gets current cached config or load it with validation.
+    WARNING: Should either be called in cli.py or inside class methods, not outside, so
+    as to make tests not interfering with production directories."""
+    return create_config()

@@ -7,15 +7,12 @@ import pytest
 
 from manuscript_reference_lister.repositories import JournalRepository
 from manuscript_reference_lister.schemas import JournalMetadata
-from manuscript_reference_lister.utils import get_config
 
 
 @pytest.fixture
-def repo(tmp_path) -> JournalRepository:
-    """Provides a fresh, fully isolated instance of JournalRepository for each test."""
-    prod_config = get_config()
-    test_config = prod_config.model_copy(update={"local_repo_dir_path": tmp_path})
-    return JournalRepository(config=test_config)
+def repo() -> JournalRepository:
+    """Provides a fresh instance of JournalRepository for each test."""
+    return JournalRepository()
 
 
 def test_get_journal_metadata_success(repo: JournalRepository) -> None:

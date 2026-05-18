@@ -3,7 +3,9 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from manuscript_reference_lister.cli import main
+from manuscript_reference_lister.cli import cli
+from manuscript_reference_lister.exceptions import JournalSyncError
+from manuscript_reference_lister.utils import AppConfig
 
 
 @pytest.fixture
@@ -23,25 +25,34 @@ def mock_setup_logging():
         yield mock
 
 
-def test_cli_success(runner: CliRunner) -> None:
+def test_cli_success(runner: CliRunner, test_config: AppConfig) -> None:
     """Verify that the CLI exits with 0 on successful execution."""
     with patch("manuscript_reference_lister.cli.run") as mock_run:
-        result = runner.invoke(main, ["-f", "manuscript.docx"])
+        result = runner.invoke(
+            cli, ["main", "-f", "manuscript.docx"], obj={"config": test_config}
+        )
 
         assert result.exit_code == 0
         assert "Done." in result.output
         mock_run.assert_called_once_with(
-            input_file_path="manuscript.docx", input_text="", output_filepath=None
+            input_file_path="manuscript.docx",
+            input_text="",
+            output_filepath=None,
+            config=test_config,
         )
 
 
-def test_cli_handles_unexpected_exception_and_exits_1(runner: CliRunner) -> None:
+def test_cli_handles_unexpected_exception_and_exits_1(
+    runner: CliRunner, test_config: AppConfig
+) -> None:
     """Verify that an unhandled exception in core.run causes the CLI to print
     an error message and exit with status code 1."""
     with patch("manuscript_reference_lister.cli.run") as mock_run:
         mock_run.side_effect = RuntimeError("Database or File system corruption")
 
-        result = runner.invoke(main, ["-f", "corrupted.docx"])
+        result = runner.invoke(
+            cli, ["main", "-f", "corrupted.docx"], obj={"config": test_config}
+        )
 
         assert result.exit_code == 1
         assert (
@@ -55,13 +66,17 @@ def test_cli_handles_unexpected_exception_and_exits_1(runner: CliRunner) -> None
         )
 
 
-def test_cli_shows_traceback_in_verbose_mode(runner: CliRunner) -> None:
+def test_cli_shows_traceback_in_verbose_mode(
+    runner: CliRunner, test_config: AppConfig
+) -> None:
     """Verify that passing the verbose flag (-v) includes the debug traceback
     upon failure."""
     with patch("manuscript_reference_lister.cli.run") as mock_run:
         mock_run.side_effect = RuntimeError("Network link completely broken")
 
-        result = runner.invoke(main, ["-f", "manuscript.docx", "-v"])
+        result = runner.invoke(
+            cli, ["main", "-f", "manuscript.docx", "-v"], obj={"config": test_config}
+        )
 
         assert result.exit_code == 1
         assert (
@@ -74,16 +89,45 @@ def test_cli_shows_traceback_in_verbose_mode(runner: CliRunner) -> None:
         assert "-----------------------" in result.output
 
 
-def test_cli_piped_input_handling(runner: CliRunner) -> None:
+def test_cli_piped_input_handling(runner: CliRunner, test_config: AppConfig) -> None:
     """Verify that standard input redirection (piping) passes the string
     correctly to the run function."""
     piped_text = "Some citation (Lenard et al., 2025)"
 
     with patch("manuscript_reference_lister.cli.run") as mock_run:
-        result = runner.invoke(main, input=piped_text)
+        result = runner.invoke(
+            cli, ["main"], input=piped_text, obj={"config": test_config}
+        )
 
         assert result.exit_code == 0
         assert "Done." in result.output
         mock_run.assert_called_once_with(
-            input_file_path=None, input_text=piped_text, output_filepath=None
+            input_file_path=None,
+            input_text=piped_text,
+            output_filepath=None,
+            config=test_config,
         )
+
+
+def test_cli_displays_suggested_journal_alternatives_table(
+    tmp_path, runner: CliRunner, test_config: AppConfig
+) -> None:
+    """Check if CLI catches journal sync error and correctly displays alternative
+    journal titles without interacting with production storage."""
+    mock_missing_journals = {
+        "nature geosciences": ["Nature Geoscience", "Natures-Geosciences"]
+    }
+    sync_error = JournalSyncError(missing_journals=mock_missing_journals)
+
+    with patch("manuscript_reference_lister.cli.run", side_effect=sync_error):
+        result = runner.invoke(
+            cli,
+            ["main", "-t", "Some text in nature geosciences."],
+            obj={"config": test_config},
+        )
+
+        assert result.exit_code == 1
+        assert "nature geosciences" in result.output
+        assert "Nature Geoscience; Natures-Geosciences" in result.output
+        assert "input_title" in result.output
+        assert "suggested alternatives" in result.output

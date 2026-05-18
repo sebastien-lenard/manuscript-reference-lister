@@ -1,11 +1,12 @@
 import logging
+from unittest.mock import patch
 
 import pytest
 
 from manuscript_reference_lister.network.http_client_registry import (
     get_http_client_registry,
 )
-from manuscript_reference_lister.utils import get_config
+from manuscript_reference_lister.utils import create_config, get_config
 
 
 @pytest.fixture(autouse=True)
@@ -39,3 +40,22 @@ def assert_logging_integrity(caplog):
             "is called by the production code without being mocked. "
             "Please ensure you apply a proper patch/mock in this test script."
         )
+
+
+@pytest.fixture
+def test_config(tmp_path):
+    """Test configuration isolated with temporary directories."""
+    config_instance = create_config()
+    test_config_obj = config_instance.model_copy(
+        update={
+            "local_repo_dir_path": tmp_path,
+            "log_dir_path": tmp_path,
+            "output_dir_path": tmp_path,
+        }
+    )
+
+    with patch(
+        "manuscript_reference_lister.utils.config.get_config",
+        return_value=test_config_obj,
+    ):
+        yield test_config_obj

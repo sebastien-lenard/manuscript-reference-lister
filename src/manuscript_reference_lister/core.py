@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from .exceptions import JournalSyncError
 from .network import get_http_client_registry
 from .parsers import CitationParser, JournalParser
 from .repositories import (
@@ -25,30 +26,40 @@ def run(
     config = config or get_config()
     if not input_text:
         input_text = DataLoader(input_file_path).extract_text_from_docx()
-    style_repo = StyleRepository(style)
+    style_repo = StyleRepository(style, config=config)
     style_repo.validate_favored_style()
     if style_repo.favored_style_is_valid is False:
         raise ValueError("Style {style} is not found in crossref api styles.")
 
     journal_parser = JournalParser()
     journal_required_titles = journal_parser.extract_all(input_text)
-    citation_parser = CitationParser()
+    citation_parser = CitationParser(config=config)
     citations = citation_parser.extract_all(input_text)
 
-    journal_repo = JournalRepository()
+    journal_repo = JournalRepository(config=config)
     journal_repo.load_all()
     journal_repo.deduplicate()
     journal_repo.merge_new_titles(journal_required_titles)
     journal_repo.update_all()
     journal_repo.save_all()
 
-    work_repo = WorkRepository()
+    sync_status = journal_repo.get_sync_status()
+    if sync_status["missing_metadata_count"] > 0:
+        missing_map = {}
+        for j in journal_repo.records:
+            if not j.is_complete:
+                alts = getattr(j, "similar_titles", []) or []
+                missing_map[j.input_title] = alts
+
+        raise JournalSyncError(missing_journals=missing_map)
+
+    work_repo = WorkRepository(config=config)
     work_repo.load_all()
     work_repo.merge_new_works(citations)
     ISSNs = list({j.ISSN for j in journal_repo.records if j.ISSN is not None})
     work_repo.update_all(ISSNs=ISSNs)
 
-    doi_repo = DoiRepository()
+    doi_repo = DoiRepository(config=config)
     ReferenceService.fill_missing_references(
         records=work_repo.records,
         doi_repo=doi_repo,

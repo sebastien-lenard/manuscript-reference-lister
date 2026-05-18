@@ -21,12 +21,15 @@ class RunIdFilter(logging.Filter):
 
 
 def get_safe_log_dir() -> Path:
-    """Get .env LOG_DIR_PATH or shifts to OS temporary directory subfolder
-    (Windows/Linux/macOS)."""
+    """Get environment LOG_DIR_PATH (may be overriden by conftest.py) or shifts to OS
+    temporary directory subfolder (Windows/Linux/macOS)."""
     try:
-        env_vars = dotenv_values(".env")
-        if "LOG_DIR_PATH" in env_vars and env_vars["LOG_DIR_PATH"]:
-            return Path(env_vars["LOG_DIR_PATH"].strip('"').strip("'"))
+        env_val = os.environ.get("LOG_DIR_PATH")
+        if not env_val:
+            env_vars = dotenv_values(".env")
+            env_val = env_vars.get("LOG_DIR_PATH")
+        if env_val:
+            return Path(env_val.strip('"').strip("'"))
     except Exception:
         pass
 
@@ -58,9 +61,8 @@ def get_logging_config(log_dir: Path, verbose_level: int = 0) -> dict:
             },
             "json": {
                 "()": "pythonjsonlogger.json.JsonFormatter",
-                "format": (
-                    "%(asctime)s %(levelname)s %(run_id)s %(name)s %(message)s",
-                ),
+                "fmt": "%(asctime)s %(levelname)s %(run_id)s %(name)s %(message)s",
+                "rename_fields": {"asctime": "timestamp", "levelname": "level"},
             },
         },
         "handlers": {

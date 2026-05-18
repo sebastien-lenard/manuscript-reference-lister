@@ -1,9 +1,11 @@
+import json
 import logging
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pythonjsonlogger.json import JsonFormatter
 
 from manuscript_reference_lister.logging_config import (
     RunIdFilter,
@@ -91,3 +93,40 @@ def test_setup_logging_creates_directory_and_calls_dictconfig() -> None:
 
         mock_path.mkdir.assert_called_once_with(parents=True, exist_ok=True)
         mock_dict_config.assert_called_once()
+
+
+def test_json_formatter_outputs_valid_structured_data() -> None:
+    """Verify that the json formatter properly extracts record fields into a
+    valid structured JSON dictionary instead of outputting raw placeholder strings.
+    """
+    dummy_path = Path("/dummy/path")
+    config = get_logging_config(dummy_path, verbose_level=1)
+
+    formatter_spec = config["formatters"]["json"]
+
+    formatter = JsonFormatter(
+        fmt=formatter_spec["fmt"], rename_fields=formatter_spec["rename_fields"]
+    )
+
+    record = logging.LogRecord(
+        name="manuscript_reference_lister.http",
+        level=logging.INFO,
+        pathname="api.py",
+        lineno=10,
+        msg="HTTP request sent",
+        args=(),
+        exc_info=None,
+    )
+    record.run_id = "ca6e29ed"
+
+    formatted_output = formatter.format(record)
+    parsed_json = json.loads(formatted_output)
+
+    assert isinstance(parsed_json, dict)
+    assert "timestamp" in parsed_json
+    assert parsed_json["level"] == "INFO"
+    assert parsed_json["run_id"] == "ca6e29ed"
+    assert parsed_json["message"] == "HTTP request sent"
+
+    for key in parsed_json.keys():
+        assert "%(" not in key, f"Detected unsolved placeholder in JSON key: {key}"

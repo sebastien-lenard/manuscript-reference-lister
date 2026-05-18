@@ -6,13 +6,25 @@ import traceback
 import click
 
 from .core import run
+from .exceptions import JournalSyncError
 from .logging_config import setup_logging
 from .utils.config import get_config
 
 logger = logging.getLogger(__name__)
 
 
-@click.command()
+@click.group()
+@click.pass_context
+def cli(ctx):
+    """CLI main entry point."""
+    # Load config here at execution, not import
+    ctx.ensure_object(dict)
+    if "config" not in ctx.obj:
+        ctx.obj["config"] = get_config()
+
+
+@cli.command()
+@click.pass_context
 @click.option(
     "-f", "--input_file", type=str, default=None, help="Filepath to docx manuscript"
 )
@@ -29,7 +41,7 @@ logger = logging.getLogger(__name__)
 @click.option(
     "-v", "--verbose", count=True, help="Increase verbosity (-v (INFO), -vv (DEBUG))"
 )
-def main(input_file, text, output_file, verbose):
+def main(ctx, input_file, text, output_file, verbose):
     """\b
     CLI entry point.
     Examples:
@@ -56,13 +68,48 @@ def main(input_file, text, output_file, verbose):
         text = text.replace("\r", "")
 
     try:
-        config = get_config()
+        config = (ctx.obj or {}).get("config") or get_config()
         config.ensure_repo_directory()
-        run(input_file_path=input_file, input_text=text, output_filepath=output_file)
+        run(
+            input_file_path=input_file,
+            input_text=text,
+            output_filepath=output_file,
+            config=config,
+        )
         click.echo("Done.")
 
     except click.ClickException as e:
         raise e
+
+    except JournalSyncError as e:
+        logger.warning("Pipeline halted: unfinished journal metadata mapping.")
+
+        click.secho(
+            f"\nError: {len(e.missing_journals)} journal(s) haven't been found.",
+            fg="red",
+            bold=True,
+            err=True,
+        )
+        click.secho(
+            "Please check the list and correct titles in the manuscript:\n",
+            fg="red",
+            err=True,
+        )
+
+        click.secho(
+            f"{'input_title':<30} | suggested alternatives",
+            fg="cyan",
+            bold=True,
+            err=True,
+        )
+        click.secho("-" * 70, fg="cyan", err=True)
+
+        for title, alts in e.missing_journals.items():
+            alternatives_str = "; ".join(alts) if alts else "No alternatives found"
+            click.echo(f"{title:<30} | {alternatives_str}", err=True)
+
+        click.echo("", err=True)
+        sys.exit(1)
 
     except Exception as e:
         logger.critical(
@@ -87,4 +134,4 @@ def main(input_file, text, output_file, verbose):
 
 
 if __name__ == "__main__":
-    main()
+    cli()

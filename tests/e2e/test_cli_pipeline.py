@@ -1,4 +1,5 @@
 import csv
+import os
 import subprocess
 from pathlib import Path
 
@@ -37,7 +38,14 @@ def test_docx_file_pipeline_execution(tmp_path: Path) -> None:
         str(output_csv),
     ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    isolated_env = os.environ.copy()
+    isolated_env["LOCAL_REPO_DIR_PATH"] = str(tmp_path / "repo")
+    isolated_env["LOG_DIR_PATH"] = str(tmp_path / "log")
+    isolated_env["OUTPUT_DIR_PATH"] = str(tmp_path / "output")
+
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, check=False, env=isolated_env
+    )
 
     assert result.returncode == 0, f"Failed .docx pipeline:\n{result.stderr}"
     assert output_csv.exists(), f"No output file generated: {output_csv}"
@@ -65,8 +73,18 @@ def test_stdin_pipeline_execution(tmp_path: Path) -> None:
     output_csv = tmp_path / "stdin_output.csv"
     cmd = ["uv", "run", "references-lister", "-v", "-o", str(output_csv)]
 
+    isolated_env = os.environ.copy()
+    isolated_env["LOCAL_REPO_DIR_PATH"] = str(tmp_path / "repo")
+    isolated_env["LOG_DIR_PATH"] = str(tmp_path / "log")
+    isolated_env["OUTPUT_DIR_PATH"] = str(tmp_path / "output")
+
     result = subprocess.run(
-        cmd, input=input_data, capture_output=True, text=True, check=False
+        cmd,
+        input=input_data,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=isolated_env,
     )
 
     assert result.returncode == 0, f"Failed stdin pipeline:\n{result.stderr}"
